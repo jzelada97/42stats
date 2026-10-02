@@ -1,0 +1,110 @@
+"""Modelo de datos. Solo guardamos lo necesario para las stats (sin email, teléfono ni nombres)."""
+from __future__ import annotations
+
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+from sqlalchemy import JSON, DateTime, Float, Index, Integer, String, create_engine
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
+from sqlalchemy.engine import make_url
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    login: Mapped[str] = mapped_column(String, index=True)
+    kind: Mapped[str | None]
+    pool_year: Mapped[str | None] = mapped_column(String, index=True)
+    pool_month: Mapped[str | None]
+    active: Mapped[bool]
+    alumni: Mapped[bool]
+    staff: Mapped[bool]
+    correction_point: Mapped[int | None]
+    wallet: Mapped[int | None]
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    alumnized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class CursusUser(Base):
+    __tablename__ = "cursus_users"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    cursus_id: Mapped[int] = mapped_column(Integer, index=True)
+    level: Mapped[float | None] = mapped_column(Float)
+    begin_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    end_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    blackholed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    has_coalition: Mapped[bool | None]
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Project(Base):
+    __tablename__ = "projects"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    name: Mapped[str]
+    slug: Mapped[str] = mapped_column(String, index=True)
+    difficulty: Mapped[int | None]
+    exam: Mapped[bool | None]
+
+
+class ProjectUser(Base):
+    __tablename__ = "project_users"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    project_id: Mapped[int] = mapped_column(Integer, index=True)
+    status: Mapped[str | None] = mapped_column(String, index=True)
+    final_mark: Mapped[int | None]
+    validated: Mapped[bool | None]
+    current_team_id: Mapped[int | None]
+    cursus_ids: Mapped[Any] = mapped_column(JSON)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    marked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("ix_project_users_user_project", "user_id", "project_id"),)
+
+
+class SyncState(Base):
+    """Estado de sincronización por recurso: marca de agua y checkpoint para reanudar."""
+
+    __tablename__ = "sync_state"
+    resource: Mapped[str] = mapped_column(String, primary_key=True)
+    status: Mapped[str] = mapped_column(String, default="idle")  # idle | running
+    watermark: Mapped[str | None]  # ISO UTC hasta donde está sincronizado
+    window_since: Mapped[str | None]
+    window_until: Mapped[str | None]
+    next_page: Mapped[int] = mapped_column(Integer, default=1)
+    last_run_at: Mapped[str | None]
+    last_count: Mapped[int | None]
+
+
+def make_engine(url: str) -> Engine:
+    u = make_url(url)
+    if u.get_backend_name() == "sqlite" and u.database and u.database != ":memory:":
+        Path(u.database).parent.mkdir(parents=True, exist_ok=True)
+    return create_engine(url)
+
+
+def init_db(engine: Engine) -> sessionmaker[Session]:
+    Base.metadata.create_all(engine)
+    return sessionmaker(engine, expire_on_commit=False)
+
+
+def upsert(session: Session, model: type[Base], rows: list[dict]) -> None:
+    """INSERT ... ON CONFLICT DO UPDATE por clave primaria (SQLite y PostgreSQL)."""
+    if not rows:
+        return
+    ins = (pg_insert if session.get_bind().dialect.name == "postgresql" else sqlite_insert)(model)
+    pk = [c.name for c in model.__table__.primary_key.columns]
+    update = {c.name: ins.excluded[c.name] for c in model.__table__.columns if c.name not in pk}
+    session.execute(ins.on_conflict_do_update(index_elements=pk, set_=update), rows)
