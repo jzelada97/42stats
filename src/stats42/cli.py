@@ -1,0 +1,87 @@
+"""CLI: `stats42 check | sync | status`."""
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+
+import typer
+from pydantic import ValidationError
+from sqlalchemy import func, select
+
+from .client import ApiError, FortyTwoClient
+from .config import Settings
+from .db import SyncState, init_db, make_engine
+from .resources import build_resources
+from .sync import sync_resource
+
+app = typer.Typer(no_args_is_help=True, help="Sincroniza y analiza datos de 42 Madrid.")
+
+
+def _settings() -> Settings:
+    try:
+        return Settings()
+    except ValidationError:
+        typer.secho("Faltan FT_UID y FT_SECRET (en el entorno o en .env). Mira .env.example.", fg="red")
+        raise typer.Exit(1)
+
+
+def _client(s: Settings) -> FortyTwoClient:
+    return FortyTwoClient(s.uid, s.secret, base_url=s.api_base, user_agent=s.user_agent)
+
+
+@app.command()
+def check() -> None:
+    """Prueba cada recurso con 1 petición: comprueba filtros y muestra el total de registros."""
+    s = _settings()
+    since = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    until = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with _client(s) as c:
+        for r in build_resources(s).values():
+            params = {**r.params, "page[size]": 1}
+            if r.incremental:
+                params["range[updated_at]"] = f"{since},{until}"
+            try:
+                resp = c.get(r.path, params)
+                typer.secho(f"OK   {r.name:<14} X-Total (últimas 24h si incremental): {resp.headers.get('X-Total')}", fg="green")
+            except ApiError as e:
+                typer.secho(f"FAIL {r.name:<14} {e}", fg="red")
+
+
+@app.command()
+def sync(
+    resources: Optional[list[str]] = typer.Argument(None, help="Recursos (por defecto, todos)."),
+    full: bool = typer.Option(False, "--full", help="Ignora la marca de agua y recarga todo."),
+    verbose: bool = typer.Option(False, "-v"),
+) -> None:
+    """Sincroniza los recursos con la base de datos (incremental y reanudable)."""
+    logging.basicConfig(level=logging.INFO if verbose else logging.WARNING, format="%(message)s")
+    s = _settings()
+    factory = init_db(make_engine(s.database_url))
+    available = build_resources(s)
+    names = resources or list(available)
+    unknown = [n for n in names if n not in available]
+    if unknown:
+        typer.secho(f"Recursos desconocidos: {unknown}. Disponibles: {list(available)}", fg="red")
+        raise typer.Exit(1)
+    with _client(s) as c:
+        for n in names:
+            r = sync_resource(factory, c, available[n], full=full)
+            tag = " (reanudado)" if r.resumed else ""
+            typer.echo(f"{r.resource}: {r.rows} filas{tag}  ventana {r.since} → {r.until}")
+        typer.echo(f"Peticiones: {c.requests}")
+
+
+@app.command()
+def status() -> None:
+    """Muestra el estado de sincronización y el nº de filas por tabla."""
+    s = _settings()
+    factory = init_db(make_engine(s.database_url))
+    resources = build_resources(s)
+    with factory() as sess:
+        states = {st.resource: st for st in sess.scalars(select(SyncState))}
+        for name, r in resources.items():
+            n = sess.scalar(select(func.count()).select_from(r.model))
+            st = states.get(name)
+            info = f"{st.status}, marca de agua {st.watermark}, última ejecución {st.last_run_at}" if st else "sin sincronizar"
+            typer.echo(f"{name:<14} {n:>8} filas · {info}")
