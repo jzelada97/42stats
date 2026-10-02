@@ -1,0 +1,10 @@
+samples/
+.env
+__pycache__/
+.venv/
+data/
+*.egg-info/
+.pytest_cache/
+spike/digest.json
+spike/feedbacks.json
+REPORT.md
