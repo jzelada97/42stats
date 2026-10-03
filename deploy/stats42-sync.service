@@ -2,6 +2,9 @@
 Description=Sincroniza los datos de 42 Madrid con la base de datos
 Requires=docker.service
 After=docker.service network-online.target
+# Reintenta si falla (la carga completa dura horas), con tope de 5 intentos por hora
+StartLimitIntervalSec=3600
+StartLimitBurst=5
 
 [Service]
 Type=oneshot
@@ -10,3 +13,5 @@ WorkingDirectory=/home/ubuntu/stats42
 ExecStart=/usr/bin/docker compose -f docker-compose.vm.yml run --rm sync
 # La primera carga completa puede tardar horas
 TimeoutStartSec=infinity
+Restart=on-failure
+RestartSec=60
