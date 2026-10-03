@@ -198,7 +198,7 @@ function renderOverview(o) {
     [o.avg_level == null ? "–" : nf.format(o.avg_level), "nivel medio"],
     [fmt(o.at_risk), `con blackhole en menos de ${o.risk_days} días`],
     [fmt(o.students), "alumnos registrados"],
-    [fmt(o.cursus_ended), "con el cursus terminado"],
+    [fmt(o.cursus_blackholed), "blackholeados (histórico)"],
   ]);
 }
 
@@ -221,8 +221,9 @@ function renderSignups(d) {
 
 function renderCohorts(d) {
   $("cohorts").innerHTML = d.length
-    ? table(["Año", "Entraron", "En el cursus", "Siguen abiertos", "Retención", "Nivel medio"],
-        d.map((c) => [esc(c.year), fmt(c.pool), fmt(c.in_cursus), fmt(c.current), `${pct(c.retention)}${meter(c.retention)}`, c.avg_level == null ? "–" : nf.format(c.avg_level)]))
+    ? table(["Año", "Entraron", "En el cursus", "Siguen abiertos", "Blackholeados", "Baja antes", "Retención", "Nivel medio"],
+        d.map((c) => [esc(c.year), fmt(c.pool), fmt(c.in_cursus), fmt(c.current), fmt(c.blackholed), fmt(c.dropped),
+          `${pct(c.retention)}${meter(c.retention)}`, c.avg_level == null ? "–" : nf.format(c.avg_level)]))
     : `<div class="empty">${waiting}</div>`;
 }
 

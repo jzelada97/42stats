@@ -342,3 +342,20 @@ def test_cheating_attempts_do_not_count_anywhere(engine):
     assert (p["attempts"], p["finished"], p["validation_rate"]) == (20, 20, 0.5)   # idéntico al caso sin cheating
     months = {m["month"]: m for m in run(engine, stats.projects_monthly)}
     assert "2026-07" not in months                                                   # el mes de esas notas ni aparece
+
+
+def test_cohorts_split_blackholed_from_early_drop_outs(engine):
+    with Session(engine) as s:
+        s.add_all([user(20, "2023"), user(21, "2023"), user(22, "2023"), user(23, "2023"), user(24, "2023")])
+        s.add_all([
+            cu(30, 20, 1.2, end_at=NOW - timedelta(days=9), bh=NOW - timedelta(days=10)),    # cierra 1 día después: blackholeado
+            cu(31, 21, 1.4, end_at=NOW - timedelta(days=100), bh=NOW - timedelta(days=20)),  # cierra 80 días antes: baja
+            cu(32, 22, 2.0, end_at=NOW - timedelta(days=1), bh=NOW - timedelta(days=200)),   # cierra 199 días después: sin clasificar
+            cu(33, 23, 3.0, end_at=NOW - timedelta(days=30), bh=None),                       # sin fecha de blackhole
+            cu(34, 24, 1.0, bh=NOW + timedelta(days=50)),                                    # abierto
+        ])
+        s.commit()
+    c = {x["year"]: x for x in run(engine, stats.cohorts, 21, NOW)}["2023"]
+    assert (c["pool"], c["in_cursus"], c["current"], c["blackholed"], c["dropped"]) == (5, 5, 1, 1, 1)
+    o = run(engine, stats.overview, 21, NOW)
+    assert o["cursus_blackholed"] == 1 and o["cursus_dropped"] == 1

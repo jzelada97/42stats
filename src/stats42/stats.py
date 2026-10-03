@@ -13,6 +13,10 @@ from sqlalchemy.orm import Session
 from .db import CursusUser, Evaluation, Event, Exam, Location, Project, ProjectUser, SyncState, User
 
 RISK_DAYS = 30
+# Un cursus cerrado cuenta como "blackholeado" si se cierra entre 1 día antes y 60 después de su fecha de
+# blackhole (en los datos, el sistema lo cierra el mismo día o al siguiente). Si se cierra más de 1 día antes,
+# es una baja anterior al blackhole. Más de 60 días después o sin fecha: no se clasifica.
+BLACKHOLE_LAG_DAYS = (-1, 60)
 TZ = ZoneInfo("Europe/Madrid")
 MAX_SESSION = timedelta(hours=12)  # una sesión más larga es un logout que no se registró
 HOST_RE = re.compile(r"^c(\d+)r(\d+)s(\d+)$")  # cluster, fila, puesto: c3r5s1
@@ -61,9 +65,23 @@ def _members(s: Session, cursus_id: int, now: datetime) -> list[dict]:
     out = []
     for user_id, level, end_at, bh in rows:
         end_at, bh = _aware(end_at), _aware(bh)
-        out.append({"user_id": user_id, "level": level, "blackholed_at": bh,
-                    "current": end_at is None or end_at > now})
+        m = {"user_id": user_id, "level": level, "blackholed_at": bh, "end_at": end_at,
+             "current": end_at is None or end_at > now}
+        m["outcome"] = _outcome(m)
+        out.append(m)
     return out
+
+
+def _outcome(m: dict) -> str:
+    """current | blackholed | dropped (baja antes del blackhole) | other."""
+    if m["current"]:
+        return "current"
+    if m["blackholed_at"] is None or m["end_at"] is None:
+        return "other"
+    lag = (m["end_at"] - m["blackholed_at"]).total_seconds() / 86400
+    if BLACKHOLE_LAG_DAYS[0] <= lag <= BLACKHOLE_LAG_DAYS[1]:
+        return "blackholed"
+    return "dropped" if lag < BLACKHOLE_LAG_DAYS[0] else "other"
 
 
 def _count(s: Session, model, *where) -> int:
@@ -86,6 +104,8 @@ def overview(s: Session, cursus_id: int = 21, now: datetime | None = None) -> di
         "cursus_members": len(members),
         "cursus_current": len(current),
         "cursus_ended": len(members) - len(current),
+        "cursus_blackholed": sum(1 for m in members if m["outcome"] == "blackholed"),
+        "cursus_dropped": sum(1 for m in members if m["outcome"] == "dropped"),
         "avg_level": round(sum(levels) / len(levels), 2) if levels else None,
         "at_risk": sum(1 for m in current if m["blackholed_at"] and now <= m["blackholed_at"] <= horizon),
         "risk_days": RISK_DAYS,
@@ -119,7 +139,8 @@ def cohorts(s: Session, cursus_id: int = 21, now: datetime | None = None) -> lis
     """Por promoción (año de la piscina): cuántos entraron y cuántos siguen en el cursus."""
     now = now or _now()
     members = {m["user_id"]: m for m in _members(s, cursus_id, now)}
-    pools: dict[str, dict] = defaultdict(lambda: {"pool": 0, "in_cursus": 0, "current": 0, "levels": []})
+    pools: dict[str, dict] = defaultdict(
+        lambda: {"pool": 0, "in_cursus": 0, "current": 0, "blackholed": 0, "dropped": 0, "levels": []})
     for uid, year in s.execute(
         select(User.id, User.pool_year).where(User.kind == "student", User.pool_year.is_not(None))
     ):
@@ -128,6 +149,8 @@ def cohorts(s: Session, cursus_id: int = 21, now: datetime | None = None) -> lis
         m = members.get(uid)
         if m:
             c["in_cursus"] += 1
+            if m["outcome"] in ("blackholed", "dropped"):
+                c[m["outcome"]] += 1
             if m["current"]:
                 c["current"] += 1
                 if m["level"] is not None:
@@ -137,6 +160,7 @@ def cohorts(s: Session, cursus_id: int = 21, now: datetime | None = None) -> lis
         lv = c["levels"]
         out.append({
             "year": year, "pool": c["pool"], "in_cursus": c["in_cursus"], "current": c["current"],
+            "blackholed": c["blackholed"], "dropped": c["dropped"],
             "retention": round(c["current"] / c["in_cursus"], 3) if c["in_cursus"] else None,
             "avg_level": round(sum(lv) / len(lv), 2) if lv else None,
         })
