@@ -41,7 +41,7 @@ class FortyTwoClient:
         self._http = httpx.Client(
             base_url=base_url,
             headers={"User-Agent": user_agent, "Accept": "application/json"},
-            timeout=30,
+            timeout=httpx.Timeout(120.0, connect=15.0),  # algunas consultas por rango tardan más de 30 s
             transport=transport,
         )
         self._min_interval = min_interval
@@ -75,11 +75,19 @@ class FortyTwoClient:
 
     def get(self, path: str, params: dict[str, Any] | None = None) -> httpx.Response:
         refreshed = False
+        last_error: Exception | None = None
+        r: httpx.Response | None = None
         for attempt in range(MAX_ATTEMPTS):
             self._throttle()
-            r = self._http.get(
-                path, params=params, headers={"Authorization": f"Bearer {self._get_token()}"}
-            )
+            try:
+                r = self._http.get(
+                    path, params=params, headers={"Authorization": f"Bearer {self._get_token()}"}
+                )
+            except httpx.TransportError as e:  # timeouts, cortes de conexión, DNS...
+                log.warning("%s en %s (intento %d/%d)", type(e).__name__, path, attempt + 1, MAX_ATTEMPTS)
+                last_error = e
+                self._sleep(min(2**attempt, 60))
+                continue
             self.requests += 1
             if r.is_success:
                 return r
@@ -96,6 +104,8 @@ class FortyTwoClient:
                 self._sleep(2**attempt)
                 continue
             raise ApiError(r.status_code, r.text, str(r.url))
+        if r is None:  # todos los intentos fallaron sin llegar a recibir respuesta HTTP
+            raise ApiError(0, f"{type(last_error).__name__}: {last_error}", path)
         raise ApiError(r.status_code, r.text, str(r.url))
 
     def paginate(

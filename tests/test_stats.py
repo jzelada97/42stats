@@ -253,3 +253,17 @@ def test_readonly_engine_survives_many_concurrent_requests(tmp_path):
     with pytest.raises(Exception):  # sigue siendo de solo lectura
         with ro.connect() as c:
             c.exec_driver_sql("DELETE FROM users")
+
+
+def test_readonly_connection_can_be_used_from_another_thread(tmp_path):
+    """Regresión: FastAPI abre la sesión en un hilo y ejecuta el endpoint en otro."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from stats42.db import make_engine, make_readonly_engine
+
+    url = f"sqlite:///{tmp_path / 'x.db'}"
+    init_db(make_engine(url))
+    ro = make_readonly_engine(url)
+    with ro.connect() as conn:
+        with ThreadPoolExecutor(1) as ex:
+            assert ex.submit(lambda: conn.exec_driver_sql("select 1").scalar()).result() == 1

@@ -175,9 +175,11 @@ def make_readonly_engine(url: str) -> Engine:
     path = Path(u.database).resolve().as_posix()
     # NullPool: una conexión nueva por petición. Con el pool por defecto de "sqlite://" (SingletonThreadPool,
     # tope de 5) la API cerraba conexiones aún en uso por otros hilos y el intérprete moría con SIGSEGV.
+    # check_same_thread=False: FastAPI abre la sesión en un hilo y ejecuta el endpoint en otro. Es seguro porque
+    # cada conexión pertenece a una sola petición y nunca se usa de forma simultánea.
     return create_engine(
         "sqlite://",
-        creator=lambda: sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=30),
+        creator=lambda: sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=30, check_same_thread=False),
         poolclass=NullPool,
     )
 

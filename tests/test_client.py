@@ -98,3 +98,31 @@ def test_sends_custom_user_agent():
     c = FortyTwoClient("u", "s", min_interval=0, user_agent="stats42-test", transport=httpx.MockTransport(handler))
     c.get("/v2/x")
     assert set(agents) == {"stats42-test"}
+
+
+def test_timeouts_are_retried_then_succeed():
+    calls = {"n": 0}
+
+    def handler(req):
+        if req.url.path == "/oauth/token":
+            return token_response()
+        calls["n"] += 1
+        if calls["n"] <= 2:
+            raise httpx.ReadTimeout("lento", request=req)
+        return httpx.Response(200, json=[{"ok": 1}])
+
+    c, sleeps = make_client(handler)
+    assert c.get("/v2/x").json() == [{"ok": 1}]
+    assert calls["n"] == 3 and sleeps == [1, 2]
+
+
+def test_persistent_timeouts_raise_api_error_not_raw_httpx_error():
+    def handler(req):
+        if req.url.path == "/oauth/token":
+            return token_response()
+        raise httpx.ReadTimeout("lento", request=req)
+
+    c, _ = make_client(handler)
+    with pytest.raises(ApiError) as e:
+        c.get("/v2/x")
+    assert e.value.status == 0 and "ReadTimeout" in e.value.body
