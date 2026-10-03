@@ -267,3 +267,78 @@ def test_readonly_connection_can_be_used_from_another_thread(tmp_path):
     with ro.connect() as conn:
         with ThreadPoolExecutor(1) as ex:
             assert ex.submit(lambda: conn.exec_driver_sql("select 1").scalar()).result() == 1
+
+
+def test_corrupt_marks_are_ignored_in_average(engine):
+    """Regresión: un intento con nota 1.149.710.997 dejaba la media de libft en 467.843,8."""
+    with Session(engine) as s:
+        s.add_all([
+            ProjectUser(id=701, user_id=1, project_id=1, status="finished", final_mark=1149710997, validated=True),
+            ProjectUser(id=702, user_id=2, project_id=1, status="finished", final_mark=-42, validated=False),
+        ])
+        s.commit()
+    p = run(engine, stats.projects, min_attempts=20)[0]
+    assert p["avg_mark"] == 75.0           # ninguna de las dos notas inválidas entra en la media
+    assert p["finished"] == 21             # la corrupta cuenta como intento; la de -42 (cheating) no cuenta nada
+    assert p["attempts"] == 21
+
+
+def test_projects_expose_cursus_of_each_project(engine):
+    with Session(engine) as s:
+        s.get(Project, 1).cursus_names = "42cursus, Python Piscine"
+        s.commit()
+    assert run(engine, stats.projects, min_attempts=20)[0]["cursus"] == "42cursus, Python Piscine"
+
+
+def test_blackholes_by_week_counts_only_open_cursus_and_future_dates(engine):
+    with Session(engine) as s:
+        s.add_all([
+            cu(10, 3, 1.0, bh=NOW + timedelta(days=3)),    # esta semana
+            cu(11, 5, 1.0, bh=NOW + timedelta(days=9)),    # semana siguiente
+            cu(12, 6, 1.0, bh=NOW + timedelta(days=400)),  # más allá del horizonte
+            cu(13, 4, 1.0, bh=NOW - timedelta(days=2)),    # ya pasado
+        ])
+        s.commit()
+    b = run(engine, stats.blackholes, 21, NOW, 26)
+    counts = {w["week"]: w["count"] for w in b["weeks"]}
+    assert len(b["weeks"]) == 26 and b["later"] == 2        # el 2 (+200 d) y el nuevo (+400 d)
+    assert sum(counts.values()) == 3 and b["upcoming"] == 5
+    assert "user_id" not in str(b)
+
+
+def test_map_project_keeps_cursus_names():
+    from stats42.resources import map_project
+
+    row = map_project({"id": 5, "name": "Python Module 00", "slug": "python-module-00", "difficulty": 0,
+                       "exam": False, "cursus": [{"id": 21, "name": "42cursus"}, {"id": 99, "name": "Python Piscine"}]})
+    assert row["cursus_ids"] == [21, 99] and row["cursus_names"] == "42cursus, Python Piscine"
+    assert map_project({"id": 6, "name": "x", "slug": "x"})["cursus_names"] is None
+
+
+def test_init_db_adds_new_columns_to_existing_tables(tmp_path):
+    from sqlalchemy import inspect, text
+
+    from stats42.db import make_engine
+
+    eng = make_engine(f"sqlite:///{tmp_path / 'old.db'}")
+    with eng.begin() as c:   # tabla "antigua", sin las columnas cursus_*
+        c.execute(text("CREATE TABLE projects (id INTEGER PRIMARY KEY, name VARCHAR NOT NULL, slug VARCHAR NOT NULL, "
+                       "difficulty INTEGER, exam BOOLEAN)"))
+        c.execute(text("INSERT INTO projects VALUES (1, 'libft', 'libft', 1, 0)"))
+    init_db(eng)
+    cols = {c["name"] for c in inspect(eng).get_columns("projects")}
+    assert {"cursus_ids", "cursus_names"} <= cols
+    with eng.connect() as c:
+        assert c.execute(text("SELECT name FROM projects")).scalar() == "libft"   # los datos se conservan
+
+
+def test_cheating_attempts_do_not_count_anywhere(engine):
+    """-42 es la nota que 42 pone por cheating: ni intento, ni terminado, ni validación, ni mes."""
+    with Session(engine) as s:
+        s.add_all([ProjectUser(id=800 + i, user_id=1, project_id=1, status="finished", final_mark=-42, validated=False,
+                               created_at=dt("2026-08-01T10:00:00"), marked_at=dt("2026-07-01T10:00:00")) for i in range(5)])
+        s.commit()
+    p = run(engine, stats.projects, min_attempts=20)[0]
+    assert (p["attempts"], p["finished"], p["validation_rate"]) == (20, 20, 0.5)   # idéntico al caso sin cheating
+    months = {m["month"]: m for m in run(engine, stats.projects_monthly)}
+    assert "2026-07" not in months                                                   # el mes de esas notas ni aparece

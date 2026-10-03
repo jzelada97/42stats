@@ -7,7 +7,7 @@ from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from .db import CursusUser, Evaluation, Event, Exam, Location, Project, ProjectUser, SyncState, User
@@ -157,25 +157,38 @@ def signups(s: Session, months: int = 36) -> list[dict]:
 
 # ---------------------------------------------------------------- proyectos
 
+CHEAT_MARK = -42  # 42 marca con -42 los intentos con cheating: no son un intento normal y no cuentan en las stats
+MARK_MIN, MARK_MAX = 0, 125  # la API contiene notas corruptas (p. ej. 1.149.710.997 o -42) que destrozan las medias
+
+
+def _not_cheat():
+    return or_(ProjectUser.final_mark.is_(None), ProjectUser.final_mark != CHEAT_MARK)
+
+
+def _valid_mark():
+    return and_(ProjectUser.final_mark >= MARK_MIN, ProjectUser.final_mark <= MARK_MAX)
+
+
 def _done():
     """Intento terminado: estado finished, o ya con resultado (validated no nulo) aunque el estado sea otro."""
     return or_(ProjectUser.status == "finished", ProjectUser.validated.is_not(None))
 
 
-def projects(s: Session, min_attempts: int = 20, limit: int = 30) -> list[dict]:
+def projects(s: Session, min_attempts: int = 20, limit: int = 60) -> list[dict]:
     """Proyectos del 42cursus con más intentos: validación, nota media y tiempo mediano."""
     done = _done()
     finished = case((done, 1), else_=0)
     validated = case((ProjectUser.validated.is_(True), 1), else_=0)
     in_progress = case((ProjectUser.status == "in_progress", 1), else_=0)
-    mark = case((done, ProjectUser.final_mark))
+    mark = case((and_(done, _valid_mark()), ProjectUser.final_mark))
     rows = s.execute(
         select(
             Project.id, Project.name, Project.difficulty, func.count().label("attempts"),
-            func.sum(finished), func.sum(validated), func.sum(in_progress), func.avg(mark),
+            func.sum(finished), func.sum(validated), func.sum(in_progress), func.avg(mark), Project.cursus_names,
         )
         .join(Project, Project.id == ProjectUser.project_id)
-        .group_by(Project.id, Project.name, Project.difficulty)
+        .where(_not_cheat())
+        .group_by(Project.id, Project.name, Project.difficulty, Project.cursus_names)
         .having(func.count() >= min_attempts)
         .order_by(func.count().desc())
         .limit(limit)
@@ -185,7 +198,7 @@ def projects(s: Session, min_attempts: int = 20, limit: int = 30) -> list[dict]:
     if ids:
         for pid, created, marked in s.execute(
             select(ProjectUser.project_id, ProjectUser.created_at, ProjectUser.marked_at)
-            .where(ProjectUser.project_id.in_(ids), _done(),
+            .where(ProjectUser.project_id.in_(ids), _done(), _not_cheat(),
                    ProjectUser.marked_at.is_not(None), ProjectUser.created_at.is_not(None))
         ):
             d = (_aware(marked) - _aware(created)).total_seconds() / 86400
@@ -198,8 +211,9 @@ def projects(s: Session, min_attempts: int = 20, limit: int = 30) -> list[dict]:
             "validation_rate": round(int(val or 0) / int(fin), 3) if fin else None,
             "avg_mark": round(avg, 1) if avg is not None else None,
             "median_days": round(statistics.median(days[pid]), 1) if days.get(pid) else None,
+            "cursus": cursus,
         }
-        for pid, name, diff, attempts, fin, val, prog, avg in rows
+        for pid, name, diff, attempts, fin, val, prog, avg, cursus in rows
     ]
 
 
@@ -208,7 +222,7 @@ def projects_monthly(s: Session, months: int = 36) -> list[dict]:
     m = _month(s, ProjectUser.marked_at)
     rows = s.execute(
         select(m, func.sum(case((ProjectUser.validated.is_(True), 1), else_=0)), func.count())
-        .where(_done(), ProjectUser.marked_at.is_not(None))
+        .where(_done(), _not_cheat(), ProjectUser.marked_at.is_not(None))
         .group_by(m)
     ).all()
     data = {k: (int(v or 0), int(t)) for k, v, t in rows}
@@ -218,6 +232,28 @@ def projects_monthly(s: Session, months: int = 36) -> list[dict]:
     return [{"month": k, "validated": data.get(k, (0, 0))[0],
              "failed": data.get(k, (0, 0))[1] - data.get(k, (0, 0))[0]}
             for k in _last_months(months) if k >= first]
+
+
+def blackholes(s: Session, cursus_id: int = 21, now: datetime | None = None, weeks: int = 26) -> dict:
+    """Blackholes de los próximos `weeks` semanas (alumnos con el cursus abierto), por semana. Solo agregados."""
+    now = now or _now()
+    monday = (now - timedelta(days=now.weekday())).date()
+    buckets: Counter = Counter()
+    later = 0
+    for m in _members(s, cursus_id, now):
+        bh = m["blackholed_at"]
+        if not m["current"] or bh is None or bh < now:
+            continue
+        idx = (bh.date() - monday).days // 7
+        if idx < weeks:
+            buckets[idx] += 1
+        else:
+            later += 1
+    return {
+        "weeks": [{"week": (monday + timedelta(weeks=i)).isoformat(), "count": buckets.get(i, 0)} for i in range(weeks)],
+        "later": later,
+        "upcoming": sum(buckets.values()) + later,
+    }
 
 
 # ---------------------------------------------------------------- asistencia
