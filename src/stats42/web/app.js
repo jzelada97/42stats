@@ -196,7 +196,7 @@ function renderOverview(o) {
     : "sincronización en curso: los datos se irán completando";
   $("tiles").innerHTML = tiles([
     [o.avg_level == null ? "–" : nf.format(o.avg_level), "nivel medio"],
-    [fmt(o.at_risk), `con blackhole en menos de ${o.risk_days} días`],
+    [fmt(o.at_risk), `con fecha de blackhole (API) en menos de ${o.risk_days} días`],
     [fmt(o.students), "alumnos registrados"],
     [fmt(o.cursus_blackholed), "blackholeados (histórico)"],
   ]);
@@ -246,7 +246,7 @@ function renderBlackholeHistory(b) {
   });
   $("bh-history-table").innerHTML = table(["Mes", "Blackholeados"], rows.slice().reverse().map((x) => [monthLabel(x.month), fmt(x.count)]));
   $("bh-stale").textContent = b.stale
-    ? `No se cuentan ${fmt(b.stale)} alumnos con el cursus aún abierto y una fecha de blackhole ya pasada: la fecha puede estar sin actualizar o el cierre estar pendiente.`
+    ? `No se cuentan ${fmt(b.stale)} alumnos con el cursus abierto y una fecha de blackhole ya pasada. Casi todos siguen activos: esa fecha no refleja su deadline real (milestones, freeze), que la API pública no expone.`
     : "";
 }
 
