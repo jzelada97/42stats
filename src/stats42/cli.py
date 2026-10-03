@@ -56,6 +56,7 @@ def sync(
 ) -> None:
     """Sincroniza los recursos con la base de datos (incremental y reanudable)."""
     logging.basicConfig(level=logging.INFO if verbose else logging.WARNING, format="%(message)s")
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # una línea por petición es demasiado ruido
     s = _settings()
     factory = init_db(make_engine(s.database_url))
     available = build_resources(s)
@@ -70,6 +71,18 @@ def sync(
             tag = " (reanudado)" if r.resumed else ""
             typer.echo(f"{r.resource}: {r.rows} filas{tag}  ventana {r.since} → {r.until}")
         typer.echo(f"Peticiones: {c.requests}")
+
+
+@app.command()
+def serve(
+    host: str = typer.Option("0.0.0.0", help="Dirección de escucha."),
+    port: int = typer.Option(8042, help="Puerto (dentro del contenedor; no se publica en el host)."),
+) -> None:
+    """Arranca la API y la web (solo lectura sobre la base de datos)."""
+    import uvicorn
+
+    uvicorn.run("stats42.api:app", host=host, port=port, access_log=False, proxy_headers=True,
+                forwarded_allow_ips="*")
 
 
 @app.command()

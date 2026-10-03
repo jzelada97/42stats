@@ -12,6 +12,8 @@ dependencies = [
     "sqlalchemy>=2.0",
     "pydantic-settings>=2.2",
     "typer>=0.12",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
 ]
 
 [project.optional-dependencies]
@@ -22,6 +24,9 @@ stats42 = "stats42.cli:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+stats42 = ["web/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
