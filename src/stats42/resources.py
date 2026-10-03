@@ -145,6 +145,8 @@ class Resource:
     incremental: bool = True  # admite range[<range_field>]; si no, se recarga entero
     range_field: str = "updated_at"
     overlap: timedelta = timedelta(days=1)  # solape con la ejecución anterior
+    # Primera carga: solo este periodo hacia atrás (None = todo). `sync --full` lo ignora.
+    initial_lookback: timedelta | None = None
 
 
 def build_resources(s: Settings) -> dict[str, Resource]:
@@ -173,6 +175,7 @@ def build_resources(s: Settings) -> dict[str, Resource]:
         Resource(
             "locations", f"/v2/campus/{s.campus_id}/locations", Location, map_location,
             range_field="begin_at", overlap=timedelta(days=3),
+            initial_lookback=timedelta(days=400),  # 750.000 sesiones en total; las stats usan lo reciente
         ),
     ]
     return {r.name: r for r in rs}

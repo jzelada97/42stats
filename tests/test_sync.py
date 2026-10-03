@@ -182,3 +182,15 @@ def test_map_event_and_exam():
                       "begin_at": "2026-10-29T09:00:00.000Z"})["nbr_subscribers"] == 3
     assert map_exam({"id": 2, "name": "Exam Rank 02", "max_people": 90, "nbr_subscribers": 0,
                      "begin_at": "2026-10-29T09:00:00.000Z"})["max_people"] == 90
+
+
+def test_initial_lookback_limits_first_load_but_full_ignores_it(factory):
+    from stats42.sync import sync_resource
+
+    res = Resource("users", "/v2/campus/22/users", User, map_user, initial_lookback=timedelta(days=400))
+    client = FakeClient([[user(1)]])
+    sync_resource(factory, client, res, now=NOW)
+    assert client.calls[0]["params"]["range[updated_at]"] == "2025-08-28T12:00:00Z,2026-10-02T12:00:00Z"
+    client = FakeClient([[user(1)]])
+    sync_resource(factory, client, res, full=True, now=NOW)
+    assert client.calls[0]["params"]["range[updated_at]"].startswith("2013-01-01")

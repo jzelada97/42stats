@@ -57,7 +57,12 @@ def sync_resource(
         if resumed:
             since, until, page = st.window_since, st.window_until, st.next_page
         else:
-            since = EPOCH if (full or not st.watermark) else _iso(_parse(st.watermark) - res.overlap)
+            if st.watermark and not full:
+                since = _iso(_parse(st.watermark) - res.overlap)
+            elif res.initial_lookback and not full:
+                since = _iso(now - res.initial_lookback)
+            else:
+                since = EPOCH
             until, page = _iso(now), 1
             st.status, st.window_since, st.window_until, st.next_page = "running", since, until, 1
         s.add(st)
