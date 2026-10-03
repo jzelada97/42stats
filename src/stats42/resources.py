@@ -6,7 +6,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from .config import Settings
-from .db import Base, CursusUser, Evaluation, Event, Exam, Location, Project, ProjectUser, User
+from .db import (Base, CursusUser, Evaluation, Event, Exam, Location, Project, ProjectUser, Quest, QuestUser,
+                 User)
 
 
 def _dt(s: str | None) -> datetime | None:
@@ -138,6 +139,30 @@ def map_exam(x: dict) -> dict:
     }
 
 
+def map_quest(q: dict) -> dict:
+    return {
+        "id": q["id"],
+        "name": q.get("name"),
+        "slug": q.get("slug"),
+        "kind": q.get("kind"),
+        "internal_name": q.get("internal_name"),
+        "cursus_id": q.get("cursus_id"),
+        "position": q.get("position"),
+    }
+
+
+def map_quest_user(qu: dict) -> dict:
+    return {
+        "id": qu["id"],
+        "user_id": qu["user"]["id"],
+        "quest_id": qu["quest_id"],
+        "validated_at": _dt(qu.get("validated_at")),
+        "end_at": _dt(qu.get("end_at")),
+        "created_at": _dt(qu.get("created_at")),
+        "updated_at": _dt(qu.get("updated_at")),
+    }
+
+
 @dataclass(frozen=True)
 class Resource:
     name: str
@@ -164,6 +189,8 @@ def build_resources(s: Settings) -> dict[str, Resource]:
         Resource("projects", "/v2/projects", Project, map_project, incremental=False),
         Resource("events", f"/v2/campus/{s.campus_id}/events", Event, map_event, incremental=False),
         Resource("exams", f"/v2/campus/{s.campus_id}/exams", Exam, map_exam, incremental=False),
+        Resource("quests", f"/v2/cursus/{s.cursus_id}/quests", Quest, map_quest, incremental=False),
+        Resource("quest_users", "/v2/quests_users", QuestUser, map_quest_user, {"filter[campus_id]": s.campus_id}),
         Resource(
             "project_users", "/v2/projects_users", ProjectUser, map_project_user,
             {"filter[campus]": s.campus_id},

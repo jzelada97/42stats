@@ -137,6 +137,32 @@ class Exam(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class Quest(Base):
+    """Misión del cursus; en el currículo nuevo los milestones son los "Common Core Rank 00..05"."""
+
+    __tablename__ = "quests"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    name: Mapped[str | None]
+    slug: Mapped[str | None]
+    kind: Mapped[str | None]
+    internal_name: Mapped[str | None]
+    cursus_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    position: Mapped[int | None]
+
+
+class QuestUser(Base):
+    __tablename__ = "quest_users"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    quest_id: Mapped[int] = mapped_column(Integer, index=True)
+    validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    end_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("ix_quest_users_user_quest", "user_id", "quest_id"),)
+
+
 class SyncState(Base):
     """Estado de sincronización por recurso: marca de agua y checkpoint para reanudar."""
 
