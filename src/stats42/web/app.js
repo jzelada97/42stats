@@ -256,27 +256,42 @@ function renderAttendance(a) {
   a.seats.length ? seatMap($("seatmap"), a.seats) : empty(["seatmap"], "Sin datos de puestos.");
 }
 
-/* proyectos: tabla ordenable y filtrable */
+/* proyectos: un cuadro por cursus, tablas ordenables y filtro común */
 const PCOLS = [
-  ["name", "Proyecto", false], ["cursus", "Cursus", false], ["attempts", "Intentos", true], ["in_progress", "En curso", true], ["finished", "Terminados", true],
+  ["name", "Proyecto", false], ["attempts", "Intentos", true], ["in_progress", "En curso", true], ["finished", "Terminados", true],
   ["validation_rate", "Validación", true], ["avg_mark", "Nota media", true], ["median_days", "Mediana (días)", true],
 ];
-const pstate = { rows: [], key: "attempts", dir: -1, q: "" };
-function renderProjectsTable() {
-  const q = pstate.q.trim().toLowerCase();
-  const rows = pstate.rows.filter((r) => !q || r.name.toLowerCase().includes(q) || (r.cursus || "").toLowerCase().includes(q)).sort((a, b) => {
+const pstate = { groups: [], key: "attempts", dir: -1, q: "" };
+
+function projectRows(g, q) {
+  return g.rows.filter((r) => !q || r.name.toLowerCase().includes(q)).sort((a, b) => {
     const x = a[pstate.key], y = b[pstate.key];
-    if (x == null) return 1; if (y == null) return -1;
+    if (x == null) return 1;
+    if (y == null) return -1;
     return (typeof x === "string" ? x.localeCompare(y) : x - y) * pstate.dir;
   });
+}
+function projectTable(rows) {
   const head = PCOLS.map(([k, l, n]) => `<th class="sort ${n ? "n" : ""}" data-k="${k}" tabindex="0" ${pstate.key === k ? `aria-sort="${pstate.dir > 0 ? "ascending" : "descending"}"` : ""}>${l}</th>`).join("");
-  const body = rows.map((p) => `<tr><td>${esc(p.name)}</td><td class="mono">${esc(p.cursus || "–")}</td><td class="n">${fmt(p.attempts)}</td><td class="n">${fmt(p.in_progress)}</td><td class="n">${fmt(p.finished)}</td>`
+  const body = rows.map((p) => `<tr><td>${esc(p.name)}</td><td class="n">${fmt(p.attempts)}</td><td class="n">${fmt(p.in_progress)}</td><td class="n">${fmt(p.finished)}</td>`
     + `<td class="n">${pct(p.validation_rate)}${meter(p.validation_rate)}</td><td class="n">${p.avg_mark == null ? "–" : fmt1(p.avg_mark)}</td><td class="n">${p.median_days == null ? "–" : fmt1(p.median_days)}</td></tr>`).join("");
-  $("projects").innerHTML = rows.length ? `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>` : `<div class="empty">Ningún proyecto coincide.</div>`;
+  return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+function renderProjectsTable() {
+  const q = pstate.q.trim().toLowerCase();
+  const cards = pstate.groups.map((g, i) => {
+    const rows = projectRows(g, q);
+    if (q && !rows.length) return "";
+    const open = q ? true : i < 3;  // los más activos abiertos; al buscar se abren los que coinciden
+    return `<details class="card cursus" ${open ? "open" : ""}><summary><h3>${g.names.map(esc).join(" · ")}</h3>`
+      + `<span class="sub">${fmt(g.projects_count)} proyectos · ${fmt(g.attempts)} intentos</span></summary>`
+      + `<div class="wrap">${projectTable(rows)}</div></details>`;
+  }).join("");
+  $("projects").innerHTML = cards || `<div class="empty card">Ningún proyecto coincide.</div>`;
 }
 function renderProjects(d) {
   if (!d.length) return empty(["projects"], "Aún no hay proyectos con intentos suficientes: la carga sigue en curso.");
-  pstate.rows = d;
+  pstate.groups = d;
   renderProjectsTable();
 }
 function renderProjectsMonthly(d) {
@@ -347,9 +362,11 @@ $("psearch").addEventListener("input", (e) => { pstate.q = e.target.value; rende
 $("projects").addEventListener("click", (e) => {
   const th = e.target.closest("th[data-k]");
   if (!th) return;
+  const open = [...document.querySelectorAll("#projects details")].map((d) => d.open);  // conserva qué cuadros están abiertos
   pstate.dir = pstate.key === th.dataset.k ? -pstate.dir : (th.dataset.k === "name" ? 1 : -1);
   pstate.key = th.dataset.k;
   renderProjectsTable();
+  document.querySelectorAll("#projects details").forEach((d, i) => { if (open[i] != null) d.open = open[i]; });
 });
 $("projects").addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.click?.(); });
 

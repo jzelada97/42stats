@@ -111,14 +111,12 @@
       <div class="chart" id="pm"></div>
       <details><summary>Ver como tabla</summary><div class="wrap" id="pm-table"></div></details>
     </div>
-    <div class="card">
-      <div class="tools">
-        <div><h3>Proyectos más intentados</h3>
-          <p class="sub">De todos los cursus. Validación sobre los terminados; «mediana» = días entre empezar y recibir la nota. No cuentan los intentos con cheating (nota −42) ni, en la media, las notas fuera de 0-125 (datos erróneos de la API).</p></div>
-        <input id="psearch" type="search" placeholder="Filtrar por proyecto o cursus…" aria-label="Filtrar proyectos">
-      </div>
-      <div class="wrap" id="projects"></div>
+    <div class="tools">
+        <div><h3>Proyectos más intentados, por cursus</h3>
+          <p class="sub">Un cuadro por cursus, según el cursus en el que el alumno de Madrid hizo el intento. Validación sobre los terminados; «mediana» = días entre empezar y recibir la nota. No cuentan los intentos con cheating (nota −42) ni, en la media, las notas fuera de 0-125 (datos erróneos de la API).</p></div>
+        <input id="psearch" type="search" placeholder="Filtrar por proyecto…" aria-label="Filtrar proyectos">
     </div>
+    <div class="cursus-list" id="projects"></div>
   </section>
 
   <!-- ======================= EVALUACIONES ======================= -->

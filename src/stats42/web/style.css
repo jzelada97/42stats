@@ -145,6 +145,13 @@ input[type="search"] { font: inherit; font-size: 13px; padding: 7px 11px; border
 .list .m { font-size: 12px; color: var(--ink-2); }
 .list .c { font: 600 12px var(--mono); }
 
+.cursus-list { display: grid; gap: 12px; }
+details.cursus > summary { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap;
+                           list-style: none; cursor: pointer; margin: 0; width: auto; color: inherit; font-size: inherit; }
+details.cursus > summary::-webkit-details-marker { display: none; }
+details.cursus > summary h3::before { content: "▸"; display: inline-block; width: 1.1em; color: var(--muted); }
+details.cursus[open] > summary h3::before { content: "▾"; }
+details.cursus[open] > summary { margin-bottom: 4px; }
 details summary { cursor: pointer; font-size: 12px; color: var(--ink-2); margin-top: 8px; width: fit-content; }
 .empty { color: var(--ink-2); font-size: 14px; padding: 14px 0 4px; }
 footer { color: var(--muted); font-size: 12px; max-width: 70ch; }
