@@ -69,6 +69,10 @@ h3 { font-size: 15px; font-weight: 650; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; min-width: 0; }
 .card.raise { box-shadow: var(--shadow); }
 
+.notice { margin-bottom: -28px; padding: 10px 14px; border: 1px solid var(--border); border-left: 3px solid var(--warn);
+          background: var(--surface); border-radius: 8px; font-size: 13px; color: var(--ink-2); }
+.notice b { color: var(--ink); }
+
 /* ---- cifras ---- */
 .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr); gap: 28px; align-items: end; }
 .hero-num { font: 700 64px/1 var(--sans); letter-spacing: -.03em; }

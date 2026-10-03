@@ -112,6 +112,24 @@ def test_projects_rates_and_median_days(engine):
     assert run(engine, stats.projects, min_attempts=1)[1]["in_progress"] == 1
 
 
+def test_validation_rate_never_exceeds_100_percent(engine):
+    with Session(engine) as s:  # validado pero con otro estado (p. ej. a la espera de corrección)
+        s.add(ProjectUser(id=500, user_id=3, project_id=1, status="waiting_for_correction", final_mark=100, validated=True,
+                          created_at=dt("2026-08-01T10:00:00"), marked_at=dt("2026-08-02T10:00:00")))
+        s.commit()
+    p = run(engine, stats.projects, min_attempts=20)[0]
+    assert p["validated"] == 11 and p["finished"] == 21 and p["validation_rate"] <= 1
+
+
+def test_overview_reports_resources_still_loading(engine):
+    o = run(engine, stats.overview, 21, NOW)
+    assert "locations" in o["loading"] and "users" in o["loading"]  # la fixture no tiene marcas de agua
+    with Session(engine) as s:
+        s.merge(SyncState(resource="locations", status="idle", watermark="2026-10-03T00:00:00Z"))
+        s.commit()
+    assert "locations" not in run(engine, stats.overview, 21, NOW)["loading"]
+
+
 def test_projects_monthly_splits_validated_and_failed(engine):
     m = {x["month"]: x for x in run(engine, stats.projects_monthly)}
     assert (m["2026-08"]["validated"], m["2026-08"]["failed"]) == (10, 0)

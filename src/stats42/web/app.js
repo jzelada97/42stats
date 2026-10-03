@@ -181,7 +181,15 @@ const empty = (ids, msg) => ids.forEach((id) => { const e = $(id); if (e) e.inne
 const waiting = "Aún no hay datos: la carga inicial sigue en curso.";
 
 /* ---------------------------------------------------------------- secciones */
+const RES_NAMES = { users: "alumnos", cursus_users: "cursus", projects: "proyectos", events: "eventos", exams: "exámenes",
+  project_users: "intentos de proyecto", evaluations: "evaluaciones", locations: "sesiones de ordenador" };
+
 function renderOverview(o) {
+  const loading = $("loading");
+  loading.hidden = !(o.loading && o.loading.length);
+  if (!loading.hidden)
+    loading.innerHTML = `<b>Carga inicial en curso.</b> Aún se están descargando: ${o.loading.map((r) => RES_NAMES[r] || r).join(", ")}. `
+      + "Hasta que termine, algunas cifras de esas secciones son parciales.";
   $("hero").textContent = fmt(o.cursus_current);
   $("updated").textContent = o.last_sync
     ? "datos actualizados el " + new Date(o.last_sync).toLocaleString("es-ES", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Madrid" })

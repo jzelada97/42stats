@@ -7,7 +7,7 @@ from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from .db import CursusUser, Evaluation, Event, Exam, Location, Project, ProjectUser, SyncState, User
@@ -20,6 +20,10 @@ DURATION_BUCKETS = [(15, "<15m"), (30, "15-30m"), (60, "30-60m"), (120, "1-2h"),
                     (240, "2-4h"), (480, "4-8h"), (float("inf"), ">8h")]
 MARK_BUCKETS = [(0, 0, "0"), (1, 49, "1-49"), (50, 79, "50-79"), (80, 99, "80-99"), (100, 100, "100"),
                 (101, 1000, "101-125")]
+
+
+# Recursos que sincroniza el job; mientras alguno no tenga su primera carga completa, las cifras son parciales.
+SYNC_RESOURCES = ("users", "cursus_users", "projects", "events", "exams", "project_users", "evaluations", "locations")
 
 
 def _now() -> datetime:
@@ -91,7 +95,14 @@ def overview(s: Session, cursus_id: int = 21, now: datetime | None = None) -> di
         "events": _count(s, Event),
         "exams": _count(s, Exam),
         "last_sync": s.scalar(select(func.max(SyncState.last_run_at))),
+        "loading": _loading(s),
     }
+
+
+def _loading(s: Session) -> list[str]:
+    """Recursos sin su primera carga completa (sin marca de agua)."""
+    done = {r for (r,) in s.execute(select(SyncState.resource).where(SyncState.watermark.is_not(None)))}
+    return [r for r in SYNC_RESOURCES if r not in done]
 
 
 def levels(s: Session, cursus_id: int = 21, now: datetime | None = None) -> list[dict]:
@@ -146,12 +157,18 @@ def signups(s: Session, months: int = 36) -> list[dict]:
 
 # ---------------------------------------------------------------- proyectos
 
+def _done():
+    """Intento terminado: estado finished, o ya con resultado (validated no nulo) aunque el estado sea otro."""
+    return or_(ProjectUser.status == "finished", ProjectUser.validated.is_not(None))
+
+
 def projects(s: Session, min_attempts: int = 20, limit: int = 30) -> list[dict]:
     """Proyectos del 42cursus con más intentos: validación, nota media y tiempo mediano."""
-    finished = case((ProjectUser.status == "finished", 1), else_=0)
+    done = _done()
+    finished = case((done, 1), else_=0)
     validated = case((ProjectUser.validated.is_(True), 1), else_=0)
     in_progress = case((ProjectUser.status == "in_progress", 1), else_=0)
-    mark = case((ProjectUser.status == "finished", ProjectUser.final_mark))
+    mark = case((done, ProjectUser.final_mark))
     rows = s.execute(
         select(
             Project.id, Project.name, Project.difficulty, func.count().label("attempts"),
@@ -168,7 +185,7 @@ def projects(s: Session, min_attempts: int = 20, limit: int = 30) -> list[dict]:
     if ids:
         for pid, created, marked in s.execute(
             select(ProjectUser.project_id, ProjectUser.created_at, ProjectUser.marked_at)
-            .where(ProjectUser.project_id.in_(ids), ProjectUser.status == "finished",
+            .where(ProjectUser.project_id.in_(ids), _done(),
                    ProjectUser.marked_at.is_not(None), ProjectUser.created_at.is_not(None))
         ):
             d = (_aware(marked) - _aware(created)).total_seconds() / 86400
@@ -191,7 +208,7 @@ def projects_monthly(s: Session, months: int = 36) -> list[dict]:
     m = _month(s, ProjectUser.marked_at)
     rows = s.execute(
         select(m, func.sum(case((ProjectUser.validated.is_(True), 1), else_=0)), func.count())
-        .where(ProjectUser.status == "finished", ProjectUser.marked_at.is_not(None))
+        .where(_done(), ProjectUser.marked_at.is_not(None))
         .group_by(m)
     ).all()
     data = {k: (int(v or 0), int(t)) for k, v, t in rows}
