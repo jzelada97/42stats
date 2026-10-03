@@ -198,7 +198,7 @@ def _done():
     return or_(ProjectUser.status == "finished", ProjectUser.validated.is_not(None))
 
 
-def projects(s: Session, min_attempts: int = 20, limit: int = 60) -> list[dict]:
+def projects(s: Session, min_attempts: int = 20, limit: int | None = 60) -> list[dict]:
     """Proyectos del 42cursus con más intentos: validación, nota media y tiempo mediano."""
     done = _done()
     finished = case((done, 1), else_=0)
@@ -215,7 +215,7 @@ def projects(s: Session, min_attempts: int = 20, limit: int = 60) -> list[dict]:
         .group_by(Project.id, Project.name, Project.difficulty, Project.cursus_names)
         .having(func.count() >= min_attempts)
         .order_by(func.count().desc())
-        .limit(limit)
+        .limit(limit)  # None = sin límite
     ).all()
     ids = [r[0] for r in rows]
     days: dict[int, list[float]] = defaultdict(list)
@@ -239,6 +239,70 @@ def projects(s: Session, min_attempts: int = 20, limit: int = 60) -> list[dict]:
         }
         for pid, name, diff, attempts, fin, val, prog, avg, cursus in rows
     ]
+
+
+def _cursus_names(s: Session) -> dict[int, str]:
+    """id de cursus -> nombre, a partir del catálogo de proyectos."""
+    names: dict[int, str] = {}
+    for ids, nm in s.execute(select(Project.cursus_ids, Project.cursus_names)
+                             .where(Project.cursus_ids.is_not(None), Project.cursus_names.is_not(None))):
+        parts = [x.strip() for x in nm.split(", ")]
+        if len(ids) == len(parts):
+            names.update(zip(ids, parts))
+    return names
+
+
+def projects_by_cursus(s: Session, min_attempts: int = 10, per_cursus: int = 25,
+                       min_cursus_attempts: int = 100) -> list[dict]:
+    """Un grupo por cursus con sus proyectos más intentados.
+
+    El cursus es el del INTENTO (project_users.cursus_ids): el que cursaba el alumno de Madrid al hacerlo. No el
+    cursus al que pertenece el proyecto en el catálogo, que incluye otros campus (C Piscine Brussels, etc.).
+    """
+    acc: dict[tuple[int, int], dict] = {}
+    for pid, cids, status, validated, mark, created, marked in s.execute(
+        select(ProjectUser.project_id, ProjectUser.cursus_ids, ProjectUser.status, ProjectUser.validated,
+               ProjectUser.final_mark, ProjectUser.created_at, ProjectUser.marked_at).where(_not_cheat())
+    ):
+        done = status == "finished" or validated is not None
+        days = None
+        if done and marked is not None and created is not None:
+            d = (_aware(marked) - _aware(created)).total_seconds() / 86400
+            days = d if d >= 0 else None
+        for cid in cids or []:
+            a = acc.setdefault((cid, pid), {"attempts": 0, "finished": 0, "validated": 0, "in_progress": 0,
+                                            "marks": [], "days": []})
+            a["attempts"] += 1
+            a["finished"] += done
+            a["validated"] += validated is True
+            a["in_progress"] += status == "in_progress"
+            if done and mark is not None and MARK_MIN <= mark <= MARK_MAX:
+                a["marks"].append(mark)
+            if days is not None:
+                a["days"].append(days)
+
+    project_names = dict(s.execute(select(Project.id, Project.name)).all())
+    cursus_names = _cursus_names(s)
+    by_cursus: dict[int, list[dict]] = defaultdict(list)
+    for (cid, pid), a in acc.items():
+        if a["attempts"] < min_attempts or pid not in project_names:
+            continue
+        by_cursus[cid].append({
+            "id": pid, "name": project_names[pid], "attempts": a["attempts"], "finished": a["finished"],
+            "validated": a["validated"], "in_progress": a["in_progress"],
+            "validation_rate": round(a["validated"] / a["finished"], 3) if a["finished"] else None,
+            "avg_mark": round(sum(a["marks"]) / len(a["marks"]), 1) if a["marks"] else None,
+            "median_days": round(statistics.median(a["days"]), 1) if a["days"] else None,
+        })
+    out = []
+    for cid, rows in by_cursus.items():
+        total = sum(r["attempts"] for r in rows)
+        if total < min_cursus_attempts:
+            continue
+        rows.sort(key=lambda r: -r["attempts"])
+        out.append({"names": [cursus_names.get(cid, f"Cursus {cid}")], "cursus_ids": [cid],
+                    "projects_count": len(rows), "attempts": total, "rows": rows[:per_cursus]})
+    return sorted(out, key=lambda g: -g["attempts"])
 
 
 def projects_monthly(s: Session, months: int = 36) -> list[dict]:

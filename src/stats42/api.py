@@ -86,7 +86,7 @@ def create_app(engine: Engine | None = None, cursus_id: int | None = None) -> Fa
 
     @app.get("/api/projects")
     def projects(s: Session = Depends(session)) -> list[dict]:
-        return cached("projects", lambda: stats.projects(s))
+        return cached("projects", lambda: stats.projects_by_cursus(s))
 
     @app.get("/api/projects/monthly")
     def projects_monthly(s: Session = Depends(session)) -> list[dict]:

@@ -359,3 +359,33 @@ def test_cohorts_split_blackholed_from_early_drop_outs(engine):
     assert (c["pool"], c["in_cursus"], c["current"], c["blackholed"], c["dropped"]) == (5, 5, 1, 1, 1)
     o = run(engine, stats.overview, 21, NOW)
     assert o["cursus_blackholed"] == 1 and o["cursus_dropped"] == 1
+
+
+def test_projects_grouped_by_the_cursus_of_the_attempt_not_the_catalog(engine):
+    """El catálogo dice que libft también es de C Piscine Brussels, pero nadie de Madrid lo hizo allí."""
+    with Session(engine) as s:
+        p = s.get(Project, 1)
+        p.cursus_ids, p.cursus_names = [21, 9, 64], "42cursus, C Piscine, C Piscine Brussels"
+        for pu in s.query(ProjectUser).filter(ProjectUser.project_id == 1):
+            pu.cursus_ids = [21] if pu.id % 2 else [9]     # impares (validados) en 42cursus, pares en C Piscine
+        s.commit()
+    g = {x["names"][0]: x for x in run(engine, stats.projects_by_cursus, min_attempts=1, min_cursus_attempts=1)}
+    assert set(g) == {"42cursus", "C Piscine"}              # Brussels no aparece: ningún intento lo tiene
+    libft42, libft9 = g["42cursus"]["rows"][0], g["C Piscine"]["rows"][0]
+    assert (libft42["attempts"], libft42["validated"], libft42["validation_rate"]) == (10, 10, 1.0)
+    assert (libft9["attempts"], libft9["validated"], libft9["validation_rate"]) == (10, 0, 0.0)
+    assert libft42["median_days"] == 4.0 and libft9["median_days"] == 40.0
+
+
+def test_projects_by_cursus_applies_thresholds_and_ignores_cheating(engine):
+    with Session(engine) as s:
+        for pu in s.query(ProjectUser).filter(ProjectUser.project_id == 1):
+            pu.cursus_ids = [21]
+        s.add_all([ProjectUser(id=900 + i, user_id=1, project_id=1, status="finished", final_mark=-42, validated=False,
+                               cursus_ids=[21]) for i in range(5)])
+        s.commit()
+    g = run(engine, stats.projects_by_cursus, min_attempts=1, min_cursus_attempts=1)
+    assert g[0]["rows"][0]["attempts"] == 20                # los 5 intentos con -42 no cuentan
+    assert run(engine, stats.projects_by_cursus, min_attempts=1, min_cursus_attempts=1000) == []
+    assert run(engine, stats.projects_by_cursus, min_attempts=50, min_cursus_attempts=1) == []   # ningún proyecto llega a 50
+    assert g[0]["names"] == ["Cursus 21"]                   # sin nombre en el catálogo: se muestra el id
