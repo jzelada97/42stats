@@ -237,6 +237,19 @@ function renderBlackholes(b) {
     + (b.later ? `<p class="sub">Y ${fmt(b.later)} alumnos con el blackhole más adelante.</p>` : "");
 }
 
+function renderBlackholeHistory(b) {
+  const h = b.history || [];
+  if (!b.history_total) return empty(["bh-history"], waiting);
+  const rows = completeMonths(h);
+  columns($("bh-history"), rows.map((x) => ({ label: monthLabel(x.month), value: x.count })), {
+    tip: (x) => `${esc(x.label)}: <b>${fmt(x.value)}</b> blackholeados`,
+  });
+  $("bh-history-table").innerHTML = table(["Mes", "Blackholeados"], rows.slice().reverse().map((x) => [monthLabel(x.month), fmt(x.count)]));
+  $("bh-stale").textContent = b.stale
+    ? `No se cuentan ${fmt(b.stale)} alumnos con el cursus aún abierto y una fecha de blackhole ya pasada: la fecha puede estar sin actualizar o el cierre estar pendiente.`
+    : "";
+}
+
 function renderAttendance(a) {
   const ids = ["heatmap", "daily", "durations", "seatmap"];
   if (!a.sessions) { $("att-tiles").innerHTML = ""; return empty(ids, "Aún no hay sesiones: la carga del histórico sigue en curso."); }
@@ -351,7 +364,8 @@ load("/api/overview", renderOverview, ["tiles"]);
 load("/api/levels", renderLevels, ["levels"]);
 load("/api/signups", renderSignups, ["signups"]);
 load("/api/cohorts", renderCohorts, ["cohorts"]);
-load("/api/blackholes", renderBlackholes, ["blackholes"]);
+get("/api/blackholes").then((b) => { renderBlackholes(b); renderBlackholeHistory(b); })
+  .catch((e) => empty(["blackholes", "bh-history"], `No se pudieron cargar estos datos (${esc(e.message)}).`));
 load("/api/attendance", renderAttendance, ["heatmap", "daily", "durations", "seatmap"]);
 load("/api/projects", renderProjects, ["projects"]);
 load("/api/projects/monthly", renderProjectsMonthly, ["pm"]);
