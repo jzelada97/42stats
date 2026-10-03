@@ -31,19 +31,23 @@ def _client(s: Settings) -> FortyTwoClient:
 
 
 @app.command()
-def check() -> None:
-    """Prueba cada recurso con 1 petición: comprueba filtros y muestra el total de registros."""
+def check(
+    total: bool = typer.Option(False, "--total", help="Sin filtro de fechas: total de registros y nº de peticiones de la carga."),
+) -> None:
+    """Prueba cada recurso con 1 petición: comprueba filtros y muestra el nº de registros."""
     s = _settings()
     since = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     until = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     with _client(s) as c:
         for r in build_resources(s).values():
-            params = {**r.params, "page[size]": 1}
-            if r.incremental:
-                params["range[updated_at]"] = f"{since},{until}"
+            params = {**r.params, "sort": "id", "page[size]": 1}
+            if r.incremental and not total:
+                params[f"range[{r.range_field}]"] = f"{since},{until}"
             try:
-                resp = c.get(r.path, params)
-                typer.secho(f"OK   {r.name:<14} X-Total (últimas 24h si incremental): {resp.headers.get('X-Total')}", fg="green")
+                n = c.get(r.path, params).headers.get("X-Total")
+                what = "total" if (total or not r.incremental) else "últimas 24 h"
+                pages = f" · ~{-(-int(n) // 100)} peticiones" if total and n and n.isdigit() else ""
+                typer.secho(f"OK   {r.name:<14} {what}: {n}{pages}", fg="green")
             except ApiError as e:
                 typer.secho(f"FAIL {r.name:<14} {e}", fg="red")
 
@@ -65,12 +69,21 @@ def sync(
     if unknown:
         typer.secho(f"Recursos desconocidos: {unknown}. Disponibles: {list(available)}", fg="red")
         raise typer.Exit(1)
+    failed = []
     with _client(s) as c:
         for n in names:
-            r = sync_resource(factory, c, available[n], full=full)
+            try:
+                r = sync_resource(factory, c, available[n], full=full)
+            except ApiError as e:  # un recurso roto no debe frenar a los demás
+                typer.secho(f"{n}: FALLÓ ({e})", fg="red")
+                failed.append(n)
+                continue
             tag = " (reanudado)" if r.resumed else ""
             typer.echo(f"{r.resource}: {r.rows} filas{tag}  ventana {r.since} → {r.until}")
         typer.echo(f"Peticiones: {c.requests}")
+    if failed:
+        typer.secho(f"Recursos con error: {failed}", fg="red")
+        raise typer.Exit(1)
 
 
 @app.command()

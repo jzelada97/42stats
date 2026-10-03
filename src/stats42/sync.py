@@ -1,7 +1,7 @@
 """Sincronización incremental y reanudable de la API de 42 a la base de datos.
 
 Cada ejecución trabaja sobre una ventana fija [since, until] de `updated_at`:
-  - since = marca de agua anterior menos 1 día de solape (o el inicio si es la 1ª vez)
+  - since = marca de agua anterior menos el solape del recurso (o el inicio si es la 1ª vez)
   - until = momento de arrancar
 Tras cada página se guarda un checkpoint (`next_page`); si el proceso se corta,
 la siguiente ejecución retoma la misma ventana donde se quedó. Los upserts son
@@ -22,7 +22,6 @@ from .resources import Resource
 log = logging.getLogger(__name__)
 
 EPOCH = "2013-01-01T00:00:00Z"  # anterior a la existencia de 42
-OVERLAP = timedelta(days=1)
 
 
 @dataclass
@@ -58,7 +57,7 @@ def sync_resource(
         if resumed:
             since, until, page = st.window_since, st.window_until, st.next_page
         else:
-            since = EPOCH if (full or not st.watermark) else _iso(_parse(st.watermark) - OVERLAP)
+            since = EPOCH if (full or not st.watermark) else _iso(_parse(st.watermark) - res.overlap)
             until, page = _iso(now), 1
             st.status, st.window_since, st.window_until, st.next_page = "running", since, until, 1
         s.add(st)
@@ -66,7 +65,7 @@ def sync_resource(
 
     params = {**res.params, "sort": "id"}
     if res.incremental:
-        params["range[updated_at]"] = f"{since},{until}"
+        params[f"range[{res.range_field}]"] = f"{since},{until}"
 
     total = 0
     for pg, items in client.paginate(res.path, params, start_page=page):

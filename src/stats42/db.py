@@ -75,6 +75,65 @@ class ProjectUser(Base):
     __table_args__ = (Index("ix_project_users_user_project", "user_id", "project_id"),)
 
 
+class Location(Base):
+    """Sesión de ordenador en el campus (un login en un puesto de un cluster)."""
+
+    __tablename__ = "locations"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    host: Mapped[str | None]  # p. ej. c3r5s1 = cluster 3, fila 5, puesto 1
+    campus_id: Mapped[int | None]
+    is_primary: Mapped[bool | None]
+    begin_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    end_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Evaluation(Base):
+    """Evaluación entre alumnos (scale_team). No se guardan comentarios ni feedback de texto."""
+
+    __tablename__ = "evaluations"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    corrector_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    team_id: Mapped[int | None]
+    project_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    scale_id: Mapped[int | None]
+    final_mark: Mapped[int | None]
+    flag_name: Mapped[str | None] = mapped_column(String, index=True)
+    flag_positive: Mapped[bool | None]
+    truant: Mapped[bool | None]
+    begin_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    filled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Event(Base):
+    __tablename__ = "events"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    name: Mapped[str | None]
+    kind: Mapped[str | None] = mapped_column(String, index=True)
+    location: Mapped[str | None]
+    max_people: Mapped[int | None]
+    nbr_subscribers: Mapped[int | None]
+    begin_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    end_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Exam(Base):
+    __tablename__ = "exams"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    name: Mapped[str | None]
+    location: Mapped[str | None]
+    max_people: Mapped[int | None]
+    nbr_subscribers: Mapped[int | None]
+    begin_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    end_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class SyncState(Base):
     """Estado de sincronización por recurso: marca de agua y checkpoint para reanudar."""
 

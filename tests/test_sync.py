@@ -138,3 +138,47 @@ def test_file_engine_uses_wal_so_reader_does_not_block_writer(tmp_path):
     with eng.connect() as c:
         assert c.execute(text("PRAGMA journal_mode")).scalar() == "wal"
         assert c.execute(text("PRAGMA busy_timeout")).scalar() == 60000
+
+
+def test_map_location_and_overlap_uses_begin_at(factory):
+    from stats42.db import Location
+    from stats42.resources import build_resources, map_location
+    from stats42.config import Settings
+    from stats42.sync import sync_resource
+
+    row = map_location({"id": 1, "user": {"id": 5}, "host": "c3r5s1", "campus_id": 22, "primary": True,
+                        "begin_at": "2026-10-02T16:39:00.000Z", "end_at": None})
+    assert (row["user_id"], row["host"], row["end_at"]) == (5, "c3r5s1", None)
+
+    res = build_resources(Settings(uid="u", secret="s"))["locations"]
+    assert res.range_field == "begin_at"
+    sync_resource(factory, FakeClient([[{"id": 1, "user": {"id": 5}, "host": "c1r1s1", "campus_id": 22,
+                                         "primary": True, "begin_at": "2026-10-01T10:00:00.000Z", "end_at": None}]]),
+                  res, now=NOW)
+    client = FakeClient([[]])
+    sync_resource(factory, client, res, now=NOW + timedelta(days=1))
+    assert client.calls[0]["params"]["range[begin_at]"] == "2026-09-29T12:00:00Z,2026-10-03T12:00:00Z"
+    assert count(factory, Location) == 1
+
+
+def test_map_evaluation_handles_invisible_corrector_and_no_text():
+    from stats42.resources import map_evaluation
+
+    row = map_evaluation({
+        "id": 9, "scale_id": 3, "corrector": "invisible", "team": {"id": 4, "project_id": 8},
+        "flag": {"name": "Ok", "positive": True}, "truant": {}, "final_mark": 100,
+        "comment": "texto privado", "feedback": "otro texto",
+        "begin_at": "2026-10-02T16:00:00.000Z", "filled_at": None,
+        "created_at": "2026-10-02T15:00:00.000Z", "updated_at": "2026-10-02T15:00:00.000Z",
+    })
+    assert row["corrector_id"] is None and row["project_id"] == 8 and row["truant"] is False
+    assert "comment" not in row and "feedback" not in row
+
+
+def test_map_event_and_exam():
+    from stats42.resources import map_event, map_exam
+
+    assert map_event({"id": 1, "name": "x", "kind": "event", "max_people": None, "nbr_subscribers": 3,
+                      "begin_at": "2026-10-29T09:00:00.000Z"})["nbr_subscribers"] == 3
+    assert map_exam({"id": 2, "name": "Exam Rank 02", "max_people": 90, "nbr_subscribers": 0,
+                     "begin_at": "2026-10-29T09:00:00.000Z"})["max_people"] == 90

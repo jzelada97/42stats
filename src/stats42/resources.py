@@ -3,10 +3,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from .config import Settings
-from .db import Base, CursusUser, Project, ProjectUser, User
+from .db import Base, CursusUser, Evaluation, Event, Exam, Location, Project, ProjectUser, User
 
 
 def _dt(s: str | None) -> datetime | None:
@@ -72,6 +72,69 @@ def map_project_user(pu: dict) -> dict:
     }
 
 
+def map_location(l: dict) -> dict:
+    return {
+        "id": l["id"],
+        "user_id": l["user"]["id"],
+        "host": l.get("host"),
+        "campus_id": l.get("campus_id"),
+        "is_primary": l.get("primary"),
+        "begin_at": _dt(l.get("begin_at")),
+        "end_at": _dt(l.get("end_at")),
+    }
+
+
+def map_evaluation(e: dict) -> dict:
+    # corrector puede venir como "invisible" en vez de un objeto
+    corrector = e.get("corrector") if isinstance(e.get("corrector"), dict) else {}
+    team = e.get("team") if isinstance(e.get("team"), dict) else {}
+    flag = e.get("flag") if isinstance(e.get("flag"), dict) else {}
+    return {
+        "id": e["id"],
+        "corrector_id": corrector.get("id"),
+        "team_id": team.get("id"),
+        "project_id": team.get("project_id"),
+        "scale_id": e.get("scale_id"),
+        "final_mark": e.get("final_mark"),
+        "flag_name": flag.get("name"),
+        "flag_positive": flag.get("positive"),
+        "truant": bool(e.get("truant")),
+        "begin_at": _dt(e.get("begin_at")),
+        "filled_at": _dt(e.get("filled_at")),
+        "created_at": _dt(e.get("created_at")),
+        "updated_at": _dt(e.get("updated_at")),
+    }
+
+
+def map_event(e: dict) -> dict:
+    return {
+        "id": e["id"],
+        "name": e.get("name"),
+        "kind": e.get("kind"),
+        "location": e.get("location"),
+        "max_people": e.get("max_people"),
+        "nbr_subscribers": e.get("nbr_subscribers"),
+        "begin_at": _dt(e.get("begin_at")),
+        "end_at": _dt(e.get("end_at")),
+        "created_at": _dt(e.get("created_at")),
+        "updated_at": _dt(e.get("updated_at")),
+    }
+
+
+def map_exam(x: dict) -> dict:
+    return {
+        "id": x["id"],
+        "name": x.get("name"),
+        "location": x.get("location"),
+        "max_people": x.get("max_people"),
+        "nbr_subscribers": x.get("nbr_subscribers"),
+        "begin_at": _dt(x.get("begin_at")),
+        "end_at": _dt(x.get("end_at")),
+        "created_at": _dt(x.get("created_at")),
+        "updated_at": _dt(x.get("updated_at")),
+    }
+
+
 @dataclass(frozen=True)
 class Resource:
     name: str
@@ -79,10 +142,13 @@ class Resource:
     model: type[Base]
     mapper: Callable[[dict], dict]
     params: dict = field(default_factory=dict)
-    incremental: bool = True  # admite range[updated_at]; si no, se recarga entero
+    incremental: bool = True  # admite range[<range_field>]; si no, se recarga entero
+    range_field: str = "updated_at"
+    overlap: timedelta = timedelta(days=1)  # solape con la ejecución anterior
 
 
 def build_resources(s: Settings) -> dict[str, Resource]:
+    # Orden de menor a mayor volumen: un fallo en los grandes no bloquea a los pequeños.
     rs = [
         Resource("users", f"/v2/campus/{s.campus_id}/users", User, map_user),
         Resource(
@@ -93,9 +159,20 @@ def build_resources(s: Settings) -> dict[str, Resource]:
             "projects", f"/v2/cursus/{s.cursus_id}/projects", Project, map_project,
             incremental=False,
         ),
+        Resource("events", f"/v2/campus/{s.campus_id}/events", Event, map_event, incremental=False),
+        Resource("exams", f"/v2/campus/{s.campus_id}/exams", Exam, map_exam, incremental=False),
         Resource(
             "project_users", "/v2/projects_users", ProjectUser, map_project_user,
             {"filter[campus]": s.campus_id},
+        ),
+        Resource(
+            "evaluations", "/v2/scale_teams", Evaluation, map_evaluation,
+            {"filter[campus_id]": s.campus_id},
+        ),
+        # Las sesiones terminan después de empezar: se filtra por inicio, con solape de 3 días.
+        Resource(
+            "locations", f"/v2/campus/{s.campus_id}/locations", Location, map_location,
+            range_field="begin_at", overlap=timedelta(days=3),
         ),
     ]
     return {r.name: r for r in rs}
