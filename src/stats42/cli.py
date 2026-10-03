@@ -87,6 +87,37 @@ def sync(
 
 
 @app.command()
+def audit(
+    resources: Optional[list[str]] = typer.Argument(None, help="Recursos (por defecto, todos)."),
+) -> None:
+    """Compara la base de datos con lo que la API realmente sirve (no con X-Total, que sobreestima)."""
+    from .audit import audit_resource
+
+    s = _settings()
+    factory = init_db(make_engine(s.database_url))
+    available = build_resources(s)
+    names = resources or list(available)
+    bad = False
+    typer.echo(f"{'recurso':<14}{'X-Total':>9}{'sirve API':>11}{'en BD':>9}{'ocultas':>9}{'faltan':>8}  veredicto")
+    with _client(s) as c:
+        for n in names:
+            try:
+                r = audit_resource(factory, c, available[n])
+            except ApiError as e:
+                typer.secho(f"{n:<14}FALLÓ ({e})", fg="red")
+                bad = True
+                continue
+            verdict = "completo" if r.ok else "INCOMPLETO"
+            note = " (ventana reciente)" if r.windowed else ""
+            typer.secho(f"{r.resource:<14}{r.api_total:>9}{r.served:>11}{r.in_db:>9}{r.hidden:>9}{r.missing:>8}  {verdict}{note}",
+                        fg="green" if r.ok else "red")
+            bad |= not r.ok
+    typer.echo("«ocultas» = filas que la API cuenta en X-Total pero no entrega; no se pueden cargar.")
+    if bad:
+        raise typer.Exit(1)
+
+
+@app.command()
 def serve(
     host: str = typer.Option("0.0.0.0", help="Dirección de escucha."),
     port: int = typer.Option(8042, help="Puerto (dentro del contenedor; no se publica en el host)."),
