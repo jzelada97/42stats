@@ -127,3 +127,14 @@ def test_map_project_user_extracts_nested_ids():
 def test_map_project_user_tolerates_missing_cursus_ids():
     row = map_project_user({"id": 1, "user": {"id": 5}, "project": {"id": 7}, "status": "in_progress"})
     assert row["cursus_ids"] == []
+
+
+def test_file_engine_uses_wal_so_reader_does_not_block_writer(tmp_path):
+    from sqlalchemy import text
+
+    from stats42.db import make_engine
+
+    eng = make_engine(f"sqlite:///{tmp_path / 'x.db'}")
+    with eng.connect() as c:
+        assert c.execute(text("PRAGMA journal_mode")).scalar() == "wal"
+        assert c.execute(text("PRAGMA busy_timeout")).scalar() == 60000

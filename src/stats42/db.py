@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, Float, Index, Integer, String, create_engine
+from sqlalchemy import JSON, DateTime, Float, Index, Integer, String, create_engine, event
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.engine import Engine
@@ -91,9 +91,20 @@ class SyncState(Base):
 
 def make_engine(url: str) -> Engine:
     u = make_url(url)
+    engine = create_engine(url)
     if u.get_backend_name() == "sqlite" and u.database and u.database != ":memory:":
         Path(u.database).parent.mkdir(parents=True, exist_ok=True)
-    return create_engine(url)
+
+        @event.listens_for(engine, "connect")
+        def _sqlite_pragmas(conn, _):
+            # WAL: la API lee sin bloquear a la sincronización que escribe.
+            cur = conn.cursor()
+            cur.execute("PRAGMA journal_mode=WAL")
+            cur.execute("PRAGMA busy_timeout=60000")
+            cur.execute("PRAGMA synchronous=NORMAL")
+            cur.close()
+
+    return engine
 
 
 def make_readonly_engine(url: str) -> Engine:
