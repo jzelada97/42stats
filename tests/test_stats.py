@@ -228,3 +228,28 @@ def test_index_and_static_assets_served():
     assert r.text.count("<script") == 1 and 'src="/static/app.js"' in r.text  # sin JS inline (la CSP lo bloquea)
     for asset in ("/static/app.js", "/static/style.css"):
         assert web.get(asset).status_code == 200, asset
+
+
+def test_readonly_engine_survives_many_concurrent_requests(tmp_path):
+    """Regresión: con el pool por defecto de SQLite, >5 peticiones simultáneas mataban el proceso (SIGSEGV)."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from sqlalchemy.pool import NullPool
+
+    from stats42.db import make_engine, make_readonly_engine
+
+    url = f"sqlite:///{tmp_path / 'ro.db'}"
+    factory = init_db(make_engine(url))
+    with factory() as s:
+        s.add_all([user(i) for i in range(1, 40)])
+        s.commit()
+    ro = make_readonly_engine(url)
+    assert isinstance(ro.pool, NullPool)
+    client = TestClient(create_app(ro, 21))
+    paths = ["overview", "levels", "cohorts", "signups", "projects", "attendance", "evaluations", "events"] * 6
+    with ThreadPoolExecutor(max_workers=16) as ex:
+        codes = list(ex.map(lambda p: client.get(f"/api/{p}").status_code, paths))
+    assert set(codes) == {200}
+    with pytest.raises(Exception):  # sigue siendo de solo lectura
+        with ro.connect() as c:
+            c.exec_driver_sql("DELETE FROM users")

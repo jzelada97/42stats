@@ -11,6 +11,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
+from sqlalchemy.pool import NullPool
 from sqlalchemy.engine import make_url
 
 
@@ -172,9 +173,12 @@ def make_readonly_engine(url: str) -> Engine:
     if u.get_backend_name() != "sqlite" or not u.database or u.database == ":memory:":
         return create_engine(url)
     path = Path(u.database).resolve().as_posix()
+    # NullPool: una conexión nueva por petición. Con el pool por defecto de "sqlite://" (SingletonThreadPool,
+    # tope de 5) la API cerraba conexiones aún en uso por otros hilos y el intérprete moría con SIGSEGV.
     return create_engine(
         "sqlite://",
-        creator=lambda: sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=30, check_same_thread=False),
+        creator=lambda: sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=30),
+        poolclass=NullPool,
     )
 
 
