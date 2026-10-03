@@ -22,7 +22,7 @@ CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; 
 
 # TTL en segundos por consulta: las pesadas se recalculan poco; los datos cambian una vez al día.
 TTL = {"overview": 60, "levels": 300, "cohorts": 300, "signups": 600, "projects": 600,
-       "projects_monthly": 600, "attendance": 900, "evaluations": 600, "events": 300}
+       "projects_monthly": 600, "blackholes": 300, "attendance": 900, "evaluations": 600, "events": 300}
 
 
 def create_app(engine: Engine | None = None, cursus_id: int | None = None) -> FastAPI:
@@ -75,6 +75,10 @@ def create_app(engine: Engine | None = None, cursus_id: int | None = None) -> Fa
     @app.get("/api/cohorts")
     def cohorts(s: Session = Depends(session)) -> list[dict]:
         return cached("cohorts", lambda: stats.cohorts(s, cursus_id))
+
+    @app.get("/api/blackholes")
+    def blackholes(s: Session = Depends(session)) -> dict:
+        return cached("blackholes", lambda: stats.blackholes(s, cursus_id))
 
     @app.get("/api/signups")
     def signups(s: Session = Depends(session)) -> list[dict]:

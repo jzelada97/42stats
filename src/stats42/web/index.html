@@ -51,6 +51,12 @@
       </div>
     </div>
     <div class="card">
+      <h3>Blackholes próximos</h3>
+      <p class="sub">Alumnos con el cursus abierto cuya fecha de blackhole cae en cada semana (las próximas 26). La fecha se retrasa cuando el alumno valida proyectos.</p>
+      <div class="chart" id="blackholes"></div>
+      <details><summary>Ver como tabla</summary><div class="wrap" id="blackholes-table"></div></details>
+    </div>
+    <div class="card">
       <h3>Promociones</h3>
       <p class="sub">Por año de piscina: cuántos entraron y cuántos siguen con el cursus abierto.</p>
       <div class="wrap" id="cohorts"></div>
@@ -67,27 +73,27 @@
     <div class="card raise"><div class="tiles" id="att-tiles"></div></div>
     <div class="card">
       <h3>Puestos ocupados por día y hora</h3>
-      <p class="sub">Media de puestos ocupados a la vez, por día de la semana y hora.</p>
+      <p class="sub">Media de puestos ocupados a la vez, por día de la semana y hora, en los últimos 90 días.</p>
       <div class="chart" id="heatmap"></div>
       <div class="legend"><span>menos</span><i></i><span>más</span></div>
     </div>
     <div class="grid2">
       <div class="card">
         <h3>Horas de uso por día</h3>
-        <p class="sub">Suma de todas las sesiones de cada día.</p>
+        <p class="sub">Suma de todas las sesiones de cada día, últimos 90 días.</p>
         <div class="chart" id="daily"></div>
         <details><summary>Ver como tabla</summary><div class="wrap" id="daily-table"></div></details>
       </div>
       <div class="card">
         <h3>Duración de las sesiones</h3>
-        <p class="sub">Número de sesiones según lo que duran.</p>
+        <p class="sub">Número de sesiones según lo que duran, últimos 90 días.</p>
         <div class="chart" id="durations"></div>
         <details><summary>Ver como tabla</summary><div class="wrap" id="durations-table"></div></details>
       </div>
     </div>
     <div class="card">
       <h3>Mapa de puestos</h3>
-      <p class="sub">Sesiones por puesto: fila en vertical, puesto en horizontal, un panel por cluster. Más intenso, más usado.</p>
+      <p class="sub">Sesiones por puesto en los últimos 90 días: fila en vertical, puesto en horizontal, un panel por cluster. Más intenso, más usado.</p>
       <div class="seatmap" id="seatmap"></div>
       <div class="legend"><span>menos</span><i></i><span>más</span></div>
     </div>
@@ -108,8 +114,8 @@
     <div class="card">
       <div class="tools">
         <div><h3>Proyectos más intentados</h3>
-          <p class="sub">Validación sobre los terminados. «Mediana» = días entre empezar y recibir la nota.</p></div>
-        <input id="psearch" type="search" placeholder="Filtrar proyecto…" aria-label="Filtrar proyectos">
+          <p class="sub">De todos los cursus. Validación sobre los terminados; «mediana» = días entre empezar y recibir la nota. No cuentan los intentos con cheating (nota −42) ni, en la media, las notas fuera de 0-125 (datos erróneos de la API).</p></div>
+        <input id="psearch" type="search" placeholder="Filtrar por proyecto o cursus…" aria-label="Filtrar proyectos">
       </div>
       <div class="wrap" id="projects"></div>
     </div>

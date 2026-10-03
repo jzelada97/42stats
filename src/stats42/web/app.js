@@ -226,6 +226,16 @@ function renderCohorts(d) {
     : `<div class="empty">${waiting}</div>`;
 }
 
+const weekLabel = (iso) => `${+iso.slice(8)} ${MONTHS[+iso.slice(5, 7) - 1]}`;
+function renderBlackholes(b) {
+  if (!b.upcoming) return empty(["blackholes"], waiting);
+  columns($("blackholes"), b.weeks.map((w) => ({ label: weekLabel(w.week), value: w.count, week: w.week })), {
+    tip: (x) => `Semana del ${esc(x.label)}: <b>${fmt(x.value)}</b> alumnos`,
+  });
+  $("blackholes-table").innerHTML = table(["Semana del", "Alumnos"], b.weeks.map((w) => [weekLabel(w.week), fmt(w.count)]))
+    + (b.later ? `<p class="sub">Y ${fmt(b.later)} alumnos con el blackhole más adelante.</p>` : "");
+}
+
 function renderAttendance(a) {
   const ids = ["heatmap", "daily", "durations", "seatmap"];
   if (!a.sessions) { $("att-tiles").innerHTML = ""; return empty(ids, "Aún no hay sesiones: la carga del histórico sigue en curso."); }
@@ -247,19 +257,19 @@ function renderAttendance(a) {
 
 /* proyectos: tabla ordenable y filtrable */
 const PCOLS = [
-  ["name", "Proyecto", false], ["attempts", "Intentos", true], ["in_progress", "En curso", true], ["finished", "Terminados", true],
+  ["name", "Proyecto", false], ["cursus", "Cursus", false], ["attempts", "Intentos", true], ["in_progress", "En curso", true], ["finished", "Terminados", true],
   ["validation_rate", "Validación", true], ["avg_mark", "Nota media", true], ["median_days", "Mediana (días)", true],
 ];
 const pstate = { rows: [], key: "attempts", dir: -1, q: "" };
 function renderProjectsTable() {
   const q = pstate.q.trim().toLowerCase();
-  const rows = pstate.rows.filter((r) => !q || r.name.toLowerCase().includes(q)).sort((a, b) => {
+  const rows = pstate.rows.filter((r) => !q || r.name.toLowerCase().includes(q) || (r.cursus || "").toLowerCase().includes(q)).sort((a, b) => {
     const x = a[pstate.key], y = b[pstate.key];
     if (x == null) return 1; if (y == null) return -1;
     return (typeof x === "string" ? x.localeCompare(y) : x - y) * pstate.dir;
   });
   const head = PCOLS.map(([k, l, n]) => `<th class="sort ${n ? "n" : ""}" data-k="${k}" tabindex="0" ${pstate.key === k ? `aria-sort="${pstate.dir > 0 ? "ascending" : "descending"}"` : ""}>${l}</th>`).join("");
-  const body = rows.map((p) => `<tr><td>${esc(p.name)}</td><td class="n">${fmt(p.attempts)}</td><td class="n">${fmt(p.in_progress)}</td><td class="n">${fmt(p.finished)}</td>`
+  const body = rows.map((p) => `<tr><td>${esc(p.name)}</td><td class="mono">${esc(p.cursus || "–")}</td><td class="n">${fmt(p.attempts)}</td><td class="n">${fmt(p.in_progress)}</td><td class="n">${fmt(p.finished)}</td>`
     + `<td class="n">${pct(p.validation_rate)}${meter(p.validation_rate)}</td><td class="n">${p.avg_mark == null ? "–" : fmt1(p.avg_mark)}</td><td class="n">${p.median_days == null ? "–" : fmt1(p.median_days)}</td></tr>`).join("");
   $("projects").innerHTML = rows.length ? `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>` : `<div class="empty">Ningún proyecto coincide.</div>`;
 }
@@ -325,6 +335,7 @@ load("/api/overview", renderOverview, ["tiles"]);
 load("/api/levels", renderLevels, ["levels"]);
 load("/api/signups", renderSignups, ["signups"]);
 load("/api/cohorts", renderCohorts, ["cohorts"]);
+load("/api/blackholes", renderBlackholes, ["blackholes"]);
 load("/api/attendance", renderAttendance, ["heatmap", "daily", "durations", "seatmap"]);
 load("/api/projects", renderProjects, ["projects"]);
 load("/api/projects/monthly", renderProjectsMonthly, ["pm"]);
