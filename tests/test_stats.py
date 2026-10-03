@@ -8,9 +8,15 @@ from sqlalchemy.pool import StaticPool
 
 from stats42 import stats
 from stats42.api import create_app
-from stats42.db import CursusUser, Project, ProjectUser, SyncState, User, init_db
+from stats42.db import (CursusUser, Evaluation, Event, Exam, Location, Project, ProjectUser, SyncState,
+                        User, init_db)
 
-NOW = datetime(2026, 10, 3, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 3, 12, 0, tzinfo=timezone.utc)  # sábado
+UTC = timezone.utc
+
+
+def dt(s):
+    return datetime.fromisoformat(s).replace(tzinfo=UTC)
 
 
 def user(i, year="2025", kind="student", active=True, created="2025-05-10T10:00:00+00:00"):
@@ -39,79 +45,168 @@ def engine():
         s.add_all([Project(id=1, name="libft", slug="libft", difficulty=1, exam=False),
                    Project(id=2, name="rare", slug="rare", difficulty=1, exam=False)])
         pus = [ProjectUser(id=i, user_id=1, project_id=1, status="finished", final_mark=100 if i % 2 else 50,
-                           validated=bool(i % 2)) for i in range(1, 21)]
+                           validated=bool(i % 2), created_at=dt("2026-08-01T10:00:00"),
+                           marked_at=dt("2026-08-05T10:00:00") if i % 2 else dt("2026-09-10T10:00:00"))
+               for i in range(1, 21)]
         pus.append(ProjectUser(id=99, user_id=2, project_id=2, status="in_progress", final_mark=None, validated=None))
         s.add_all(pus)
         s.add(SyncState(resource="users", status="idle", last_run_at="2026-10-03T04:30:00Z"))
+
+        # Lunes 2026-09-28 (hora de Madrid = UTC+2): 10:00-12:30 y 13:00-14:00; y una sesión abierta sin cierre.
+        s.add_all([
+            Location(id=1, user_id=1, host="c3r5s1", begin_at=dt("2026-09-28T08:00:00"), end_at=dt("2026-09-28T10:30:00")),
+            Location(id=2, user_id=2, host="c1r1s1", begin_at=dt("2026-09-28T11:00:00"), end_at=dt("2026-09-28T12:00:00")),
+            Location(id=3, user_id=2, host="raro", begin_at=dt("2026-09-30T08:00:00"), end_at=None),
+            Location(id=4, user_id=9, host="c2r2s2", begin_at=dt("2025-01-01T08:00:00"), end_at=dt("2025-01-01T09:00:00")),
+        ])
+        s.add_all([
+            Evaluation(id=1, corrector_id=1, project_id=1, final_mark=100, flag_name="Ok", flag_positive=True,
+                       truant=False, filled_at=dt("2026-08-10T10:00:00")),
+            Evaluation(id=2, corrector_id=2, project_id=1, final_mark=0, flag_name="Incomplete work",
+                       flag_positive=False, truant=False, filled_at=dt("2026-09-10T10:00:00")),
+            Evaluation(id=3, corrector_id=1, project_id=2, final_mark=125, flag_name="Ok", flag_positive=True,
+                       truant=True, filled_at=dt("2026-09-12T10:00:00")),
+            Evaluation(id=4, corrector_id=2, project_id=2, final_mark=None, flag_name="Ok", flag_positive=True,
+                       truant=False, filled_at=None, begin_at=NOW + timedelta(days=1)),
+        ])
+        s.add_all([
+            Event(id=1, name="Charla", kind="event", nbr_subscribers=10, max_people=0, begin_at=dt("2026-09-05T15:00:00")),
+            Event(id=2, name="Hackathon", kind="conference", nbr_subscribers=50, max_people=100,
+                  begin_at=dt("2026-10-10T09:00:00"), location="Cluster 1"),
+            Exam(id=1, name="Exam Rank 02", nbr_subscribers=12, max_people=90, begin_at=dt("2026-10-29T09:00:00")),
+        ])
         s.commit()
     return eng
 
 
-def test_overview(engine):
+def run(engine, fn, *args, **kw):
     with Session(engine) as s:
-        o = stats.overview(s, 21, NOW)
+        return fn(s, *args, **kw)
+
+
+def test_overview(engine):
+    o = run(engine, stats.overview, 21, NOW)
     assert o["students"] == 5 and o["active"] == 4
     assert (o["cursus_members"], o["cursus_current"], o["cursus_ended"]) == (3, 2, 1)
     assert o["avg_level"] == 2.15 and o["at_risk"] == 1
+    assert (o["sessions"], o["evaluations"], o["events"], o["exams"]) == (4, 4, 2, 1)
     assert o["last_sync"] == "2026-10-03T04:30:00Z"
 
 
 def test_levels_histogram_fills_gaps(engine):
-    with Session(engine) as s:
-        lv = stats.levels(s, 21, NOW)
-    assert lv == [{"level": 0, "count": 1}, {"level": 1, "count": 0}, {"level": 2, "count": 0}, {"level": 3, "count": 1}]
+    assert run(engine, stats.levels, 21, NOW) == [
+        {"level": 0, "count": 1}, {"level": 1, "count": 0}, {"level": 2, "count": 0}, {"level": 3, "count": 1}]
 
 
 def test_cohorts(engine):
-    with Session(engine) as s:
-        c = {x["year"]: x for x in stats.cohorts(s, 21, NOW)}
-    assert c["2025"]["pool"] == 3 and c["2025"]["in_cursus"] == 2 and c["2025"]["current"] == 2
-    assert c["2025"]["retention"] == 1.0
+    c = {x["year"]: x for x in run(engine, stats.cohorts, 21, NOW)}
+    assert c["2025"]["pool"] == 3 and c["2025"]["in_cursus"] == 2 and c["2025"]["retention"] == 1.0
     assert c["2024"]["pool"] == 2 and c["2024"]["current"] == 0 and c["2024"]["retention"] == 0.0
 
 
-def test_projects_respects_min_attempts_and_rates(engine):
-    with Session(engine) as s:
-        p = stats.projects(s, min_attempts=20)
+def test_projects_rates_and_median_days(engine):
+    p = run(engine, stats.projects, min_attempts=20)
     assert [x["name"] for x in p] == ["libft"]
-    assert p[0]["finished"] == 20 and p[0]["validated"] == 10
-    assert p[0]["validation_rate"] == 0.5 and p[0]["avg_mark"] == 75.0
+    assert (p[0]["finished"], p[0]["validated"], p[0]["validation_rate"], p[0]["avg_mark"]) == (20, 10, 0.5, 75.0)
+    assert p[0]["median_days"] == 22.0  # 10 intentos de 4 días y 10 de 40
+    assert run(engine, stats.projects, min_attempts=1)[1]["in_progress"] == 1
+
+
+def test_projects_monthly_splits_validated_and_failed(engine):
+    m = {x["month"]: x for x in run(engine, stats.projects_monthly)}
+    assert (m["2026-08"]["validated"], m["2026-08"]["failed"]) == (10, 0)
+    assert (m["2026-09"]["validated"], m["2026-09"]["failed"]) == (0, 10)
 
 
 def test_signups_has_no_gaps(engine):
-    with Session(engine) as s:
-        sg = stats.signups(s)
+    sg = run(engine, stats.signups)
     assert sg and sg[0]["month"] == "2025-05" and sg[0]["count"] == 5
     months = [x["month"] for x in sg]
     assert months == sorted(months) and len(set(months)) == len(months)
 
 
+def test_attendance_heatmap_uses_madrid_time_and_window(engine):
+    a = run(engine, stats.attendance, 90, NOW)
+    assert a["sessions"] == 3 and a["unique_users"] == 2          # la de 2025 queda fuera de la ventana
+    cell = next(c for c in a["heatmap"] if c["weekday"] == 0 and c["hour"] == 10)   # lunes 10:00 Madrid
+    assert cell["value"] == round(1 / 13, 1)                       # 13 lunes en la ventana
+    assert next(c for c in a["heatmap"] if c["weekday"] == 0 and c["hour"] == 8)["value"] == 0
+    d = next(x for x in a["daily"] if x["date"] == "2026-09-28")
+    assert d["hours"] == 3.5 and d["users"] == 2
+    assert len(a["daily"]) == 90
+
+
+def test_attendance_durations_cap_open_sessions_and_parse_hosts(engine):
+    a = run(engine, stats.attendance, 90, NOW)
+    dur = {x["label"]: x["count"] for x in a["durations"]}
+    assert dur["2-4h"] == 1 and dur["1-2h"] == 1 and dur[">8h"] == 1   # abierta: tope de 12 h
+    assert {(x["cluster"], x["row"], x["seat"]) for x in a["seats"]} == {(3, 5, 1), (1, 1, 1)}  # "raro" se ignora
+    assert a["clusters"] == [{"cluster": 1, "sessions": 1}, {"cluster": 3, "sessions": 1}]
+    assert a["peak"]["value"] > 0
+
+
+def test_evaluations(engine):
+    e = run(engine, stats.evaluations, 36, NOW)
+    assert e["total"] == 3 and e["avg_mark"] == 75.0 and e["positive_share"] == round(2 / 3, 3)
+    assert e["truant"] == 1 and e["scheduled"] == 1 and e["active_correctors_90d"] == 2
+    assert {f["name"]: f["count"] for f in e["flags"]} == {"Ok": 2, "Incomplete work": 1}
+    assert {m["label"]: m["count"] for m in e["marks"]}["0"] == 1
+    sep = next(m for m in e["monthly"] if m["month"] == "2026-09")
+    assert sep["count"] == 2 and sep["avg_mark"] == 62.5
+
+
+def test_events_and_exams(engine):
+    x = run(engine, stats.events_exams, 24, NOW)
+    assert [e["name"] for e in x["upcoming_events"]] == ["Hackathon"]
+    assert x["upcoming_events"][0]["max_people"] == 100 and x["upcoming_events"][0]["kind"] == "conference"
+    assert x["upcoming_exams"][0]["name"] == "Exam Rank 02"
+    assert {k["kind"] for k in x["kinds"]} == {"event", "conference"}
+    assert sum(m["count"] for m in x["events_monthly"]) == 2
+
+
 def test_stats_have_no_personal_fields(engine):
     with Session(engine) as s:
-        blob = str([stats.overview(s), stats.levels(s), stats.cohorts(s), stats.signups(s), stats.projects(s, 1)])
-    assert "u1" not in blob and "login" not in blob
+        blob = str([stats.overview(s), stats.levels(s), stats.cohorts(s), stats.signups(s),
+                    stats.projects(s, 1), stats.attendance(s, 90, NOW), stats.evaluations(s)])
+    assert "u1" not in blob and "login" not in blob and "corrector_id" not in blob and "user_id" not in blob
 
 
 def test_api_endpoints_and_headers(engine):
     c = TestClient(create_app(engine, 21))
     assert c.get("/api/health").json() == {"status": "ok"}
-    for path in ("overview", "levels", "cohorts", "signups", "projects"):
-        r = c.get(f"/api/{path}")
-        assert r.status_code == 200, path
+    for path in ("overview", "levels", "cohorts", "signups", "projects", "projects/monthly",
+                 "attendance", "evaluations", "events"):
+        assert c.get(f"/api/{path}").status_code == 200, path
     r = c.get("/api/overview")
     assert r.headers["cache-control"] == "public, max-age=300"
     assert r.headers["x-content-type-options"] == "nosniff"
-    assert "default-src 'self'" in r.headers["content-security-policy"]
-    assert "cache-control" not in c.get("/api/health").headers or "max-age" not in c.get("/api/health").headers.get("cache-control", "")
+    assert "script-src 'self'" in r.headers["content-security-policy"]
+    assert "max-age" not in c.get("/api/health").headers.get("cache-control", "")
+
+
+def test_api_caches_expensive_queries(engine, monkeypatch):
+    calls = {"n": 0}
+    real = stats.attendance
+
+    def counting(*a, **k):
+        calls["n"] += 1
+        return real(*a, **k)
+
+    monkeypatch.setattr(stats, "attendance", counting)
+    c = TestClient(create_app(engine, 21))
+    c.get("/api/attendance"), c.get("/api/attendance")
+    assert calls["n"] == 1
 
 
 def test_api_returns_503_when_tables_missing():
     empty = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
-    r = TestClient(create_app(empty, 21)).get("/api/overview")
-    assert r.status_code == 503
+    assert TestClient(create_app(empty, 21)).get("/api/overview").status_code == 503
 
 
-def test_index_served():
+def test_index_and_static_assets_served():
     web = TestClient(create_app(create_engine("sqlite://"), 21))
     r = web.get("/")
     assert r.status_code == 200 and "42" in r.text
+    assert r.text.count("<script") == 1 and 'src="/static/app.js"' in r.text  # sin JS inline (la CSP lo bloquea)
+    for asset in ("/static/app.js", "/static/style.css"):
+        assert web.get(asset).status_code == 200, asset
