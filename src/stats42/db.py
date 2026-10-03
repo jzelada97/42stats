@@ -57,6 +57,8 @@ class Project(Base):
     slug: Mapped[str] = mapped_column(String, index=True)
     difficulty: Mapped[int | None]
     exam: Mapped[bool | None]
+    cursus_ids: Mapped[Any | None] = mapped_column(JSON)
+    cursus_names: Mapped[str | None]  # p. ej. "42cursus, Python Piscine"
 
 
 class ProjectUser(Base):
@@ -184,8 +186,28 @@ def make_readonly_engine(url: str) -> Engine:
     )
 
 
+def add_missing_columns(engine: Engine) -> list[str]:
+    """create_all no altera tablas existentes: añade las columnas nuevas (siempre opcionales) que falten."""
+    from sqlalchemy import inspect, text
+
+    added = []
+    insp = inspect(engine)
+    for table in Base.metadata.sorted_tables:
+        if not insp.has_table(table.name):
+            continue
+        have = {c["name"] for c in insp.get_columns(table.name)}
+        for col in table.columns:
+            if col.name not in have and col.nullable:
+                ddl = col.type.compile(dialect=engine.dialect)
+                with engine.begin() as conn:
+                    conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {ddl}'))
+                added.append(f"{table.name}.{col.name}")
+    return added
+
+
 def init_db(engine: Engine) -> sessionmaker[Session]:
     Base.metadata.create_all(engine)
+    add_missing_columns(engine)
     return sessionmaker(engine, expire_on_commit=False)
 
 

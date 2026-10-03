@@ -47,12 +47,15 @@ def map_cursus_user(c: dict) -> dict:
 
 
 def map_project(p: dict) -> dict:
+    cursus = [c for c in (p.get("cursus") or []) if isinstance(c, dict)]
     return {
         "id": p["id"],
         "name": p["name"],
         "slug": p["slug"],
         "difficulty": p.get("difficulty"),
         "exam": p.get("exam"),
+        "cursus_ids": [c.get("id") for c in cursus],
+        "cursus_names": ", ".join(c.get("name") or "" for c in cursus) or None,
     }
 
 
@@ -157,10 +160,8 @@ def build_resources(s: Settings) -> dict[str, Resource]:
             "cursus_users", "/v2/cursus_users", CursusUser, map_cursus_user,
             {"filter[campus_id]": s.campus_id, "filter[cursus_id]": s.cursus_id},
         ),
-        Resource(
-            "projects", f"/v2/cursus/{s.cursus_id}/projects", Project, map_project,
-            incremental=False,
-        ),
+        # Catálogo completo (no solo el 42cursus): los Python Modules, exámenes, etc. viven en otros cursus.
+        Resource("projects", "/v2/projects", Project, map_project, incremental=False),
         Resource("events", f"/v2/campus/{s.campus_id}/events", Event, map_event, incremental=False),
         Resource("exams", f"/v2/campus/{s.campus_id}/exams", Exam, map_exam, incremental=False),
         Resource(
