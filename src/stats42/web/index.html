@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>42 Madrid · estadísticas</title>
+<meta name="description" content="Estadísticas agregadas del campus 42 Madrid a partir de la API pública de 42.">
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,.10);
+    --series-1: #2a78d6; --track: #cde2fb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10);
+      --series-1: #3987e5; --track: #0d366b;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10);
+    --series-1: #3987e5; --track: #0d366b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 32px 16px 56px; display: grid; gap: 20px; }
+  header h1 { font-size: 20px; margin: 0 0 2px; font-weight: 650; }
+  header p, .sub { margin: 0; color: var(--ink-2); font-size: 13px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+  h2 { font-size: 15px; margin: 0 0 2px; font-weight: 650; }
+  .hero { display: grid; gap: 20px; grid-template-columns: minmax(0,1.2fr) minmax(0,2fr); align-items: end; }
+  .hero-num { font-size: 56px; line-height: 1; font-weight: 650; letter-spacing: -.02em; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 16px; }
+  .tile .v { font-size: 24px; font-weight: 650; line-height: 1.2; }
+  .tile .l { font-size: 13px; color: var(--ink-2); }
+  .chart { position: relative; margin-top: 10px; }
+  svg { display: block; width: 100%; overflow: visible; }
+  svg text { fill: var(--muted); font: 11px system-ui, sans-serif; }
+  .grid { stroke: var(--grid); stroke-width: 1; }
+  .axis { stroke: var(--axis); stroke-width: 1; }
+  .bar { fill: var(--series-1); }
+  .line { fill: none; stroke: var(--series-1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .area { fill: var(--series-1); opacity: .10; }
+  .dot { fill: var(--series-1); stroke: var(--surface); stroke-width: 2; }
+  .cross { stroke: var(--axis); stroke-width: 1; }
+  .hit { fill: transparent; }
+  .lbl { fill: var(--ink-2) !important; font-weight: 600; }
+  .tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border);
+         border-radius: 8px; padding: 6px 10px; font-size: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.12);
+         transform: translate(-50%, -110%); white-space: nowrap; opacity: 0; transition: opacity .08s; z-index: 2; }
+  .tip b { font-weight: 650; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+  th { text-align: left; font-weight: 600; color: var(--ink-2); border-bottom: 1px solid var(--axis); padding: 6px 8px 6px 0; }
+  td { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--grid); }
+  th.n, td.n { text-align: right; font-variant-numeric: tabular-nums; padding-right: 0; }
+  .meter { display: inline-block; width: 90px; height: 6px; background: var(--track); border-radius: 3px; vertical-align: middle; margin-left: 8px; overflow: hidden; }
+  .meter i { display: block; height: 100%; background: var(--series-1); }
+  .wrap { overflow-x: auto; }
+  details summary { cursor: pointer; font-size: 12px; color: var(--ink-2); margin-top: 6px; }
+  .empty { color: var(--ink-2); font-size: 14px; padding: 18px 0 6px; }
+  .err { color: var(--ink-2); }
+  footer { color: var(--muted); font-size: 12px; }
+  @media (max-width: 640px) { .hero { grid-template-columns: 1fr; } .hero-num { font-size: 48px; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>42 Madrid · estadísticas del campus</h1>
+    <p id="updated">Cargando…</p>
+  </header>
+
+  <section class="card hero" aria-label="Resumen">
+    <div><div class="hero-num" id="hero">–</div><div class="sub">alumnos con el 42cursus abierto</div></div>
+    <div class="tiles" id="tiles"></div>
+  </section>
+
+  <section class="card">
+    <h2>Distribución de niveles</h2>
+    <p class="sub">Alumnos con el 42cursus abierto, por nivel (parte entera).</p>
+    <div class="chart" id="levels"></div>
+    <details><summary>Ver como tabla</summary><div class="wrap" id="levels-table"></div></details>
+  </section>
+
+  <section class="card">
+    <h2>Altas por mes</h2>
+    <p class="sub">Cuentas de alumno creadas cada mes (entradas a la piscina).</p>
+    <div class="chart" id="signups"></div>
+    <details><summary>Ver como tabla</summary><div class="wrap" id="signups-table"></div></details>
+  </section>
+
+  <section class="card">
+    <h2>Promociones</h2>
+    <p class="sub">Por año de piscina: cuántos entraron y cuántos siguen con el cursus abierto.</p>
+    <div class="wrap" id="cohorts"></div>
+  </section>
+
+  <section class="card">
+    <h2>Proyectos del 42cursus</h2>
+    <p class="sub">Los más intentados: tasa de validación sobre los terminados y nota media.</p>
+    <div class="wrap" id="projects"></div>
+  </section>
+
+  <footer>Solo datos agregados: no se muestra ninguna persona. Fuente: API pública de 42.</footer>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => (n == null ? "–" : Number(n).toLocaleString("es-ES"));
+const pct = (r) => (r == null ? "–" : Math.round(r * 100) + " %");
+const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const monthLabel = (m) => `${MONTHS[+m.slice(5) - 1]} ${m.slice(2, 4)}`;
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const state = {};
+
+async function get(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.status);
+  return r.json();
+}
+
+// ---------- utilidades de gráficos ----------
+function niceMax(v) {
+  if (v <= 0) return 1;
+  const p = 10 ** Math.floor(Math.log10(v)), f = v / p;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
+}
+function frame(el, w, h, m, max, yTicks = 4) {
+  const iw = w - m.l - m.r, ih = h - m.t - m.b;
+  const y = (v) => m.t + ih - (v / max) * ih;
+  let s = `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`;
+  for (let i = 0; i <= yTicks; i++) {
+    const v = (max / yTicks) * i;
+    s += `<line class="${i ? "grid" : "axis"}" x1="${m.l}" x2="${w - m.r}" y1="${y(v)}" y2="${y(v)}"/>`
+       + `<text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end">${fmt(Math.round(v))}</text>`;
+  }
+  return { s, iw, ih, y };
+}
+function tooltip(el) {
+  let t = el.querySelector(".tip");
+  if (!t) { t = document.createElement("div"); t.className = "tip"; el.appendChild(t); }
+  return {
+    show(x, y, html) { t.innerHTML = html; t.style.left = x + "px"; t.style.top = y + "px"; t.style.opacity = 1; },
+    hide() { t.style.opacity = 0; },
+  };
+}
+
+function columns(el, data) {
+  const w = el.clientWidth || 600, h = 240, m = { l: 40, r: 8, t: 16, b: 28 };
+  const max = niceMax(Math.max(...data.map((d) => d.value)));
+  const { s, iw, ih, y } = frame(el, w, h, m, max);
+  const band = iw / data.length, bw = Math.min(24, band * 0.6);
+  const top = data.reduce((a, d, i) => (d.value > data[a].value ? i : a), 0);
+  let svg = s;
+  data.forEach((d, i) => {
+    const x = m.l + band * i + (band - bw) / 2, yt = y(d.value), hgt = Math.max(m.t + ih - yt, 0);
+    const r = Math.min(4, hgt, bw / 2);
+    if (hgt > 0) svg += `<path class="bar" data-i="${i}" d="M${x},${m.t + ih} V${yt + r} Q${x},${yt} ${x + r},${yt} H${x + bw - r} Q${x + bw},${yt} ${x + bw},${yt + r} V${m.t + ih} Z"/>`;
+    if (i === top && d.value > 0) svg += `<text class="lbl" x="${x + bw / 2}" y="${yt - 6}" text-anchor="middle">${fmt(d.value)}</text>`;
+    svg += `<text x="${x + bw / 2}" y="${h - 8}" text-anchor="middle">${d.label}</text>`;
+    svg += `<rect class="hit" data-i="${i}" x="${m.l + band * i}" y="${m.t}" width="${band}" height="${ih}"/>`;
+  });
+  el.innerHTML = svg + "</svg>";
+  const tip = tooltip(el);
+  el.querySelectorAll(".hit").forEach((r) => {
+    r.addEventListener("mousemove", () => {
+      const d = data[+r.dataset.i];
+      tip.show(m.l + band * (+r.dataset.i + 0.5), y(d.value), `Nivel ${d.label}: <b>${fmt(d.value)}</b> alumnos`);
+    });
+    r.addEventListener("mouseleave", tip.hide);
+  });
+}
+
+function lineChart(el, data) {
+  const w = el.clientWidth || 600, h = 240, m = { l: 40, r: 14, t: 16, b: 28 };
+  const max = niceMax(Math.max(...data.map((d) => d.value)));
+  const { s, iw, ih, y } = frame(el, w, h, m, max);
+  const x = (i) => m.l + (data.length === 1 ? iw / 2 : (iw * i) / (data.length - 1));
+  const pts = data.map((d, i) => `${x(i)},${y(d.value)}`);
+  let svg = s;
+  const step = Math.ceil(data.length / Math.max(2, Math.floor(iw / 70)));
+  data.forEach((d, i) => { if (i % step === 0) svg += `<text x="${x(i)}" y="${h - 8}" text-anchor="middle">${monthLabel(d.month)}</text>`; });
+  svg += `<path class="area" d="M${x(0)},${y(0)} L${pts.join(" L")} L${x(data.length - 1)},${y(0)} Z"/>`;
+  svg += `<polyline class="line" points="${pts.join(" ")}"/>`;
+  const last = data.length - 1;
+  svg += `<circle class="dot" cx="${x(last)}" cy="${y(data[last].value)}" r="4"/>`;
+  svg += `<line class="cross" id="cx" y1="${m.t}" y2="${m.t + ih}" style="display:none"/><circle class="dot" id="cd" r="4" style="display:none"/>`;
+  svg += `<rect class="hit" id="hit" x="${m.l}" y="${m.t}" width="${iw}" height="${ih}"/></svg>`;
+  el.innerHTML = svg;
+  const tip = tooltip(el), cx = el.querySelector("#cx"), cd = el.querySelector("#cd");
+  el.querySelector("#hit").addEventListener("mousemove", (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const i = Math.max(0, Math.min(last, Math.round(((e.clientX - rect.left) / rect.width) * last)));
+    cx.setAttribute("x1", x(i)); cx.setAttribute("x2", x(i)); cx.style.display = "";
+    cd.setAttribute("cx", x(i)); cd.setAttribute("cy", y(data[i].value)); cd.style.display = "";
+    tip.show(x(i), y(data[i].value) - 4, `${monthLabel(data[i].month)}: <b>${fmt(data[i].value)}</b> altas`);
+  });
+  el.querySelector("#hit").addEventListener("mouseleave", () => { cx.style.display = "none"; cd.style.display = "none"; tip.hide(); });
+}
+
+const table = (head, rows) =>
+  `<table><thead><tr>${head.map((h, i) => `<th class="${i ? "n" : ""}">${h}</th>`).join("")}</tr></thead><tbody>${
+    rows.map((r) => `<tr>${r.map((c, i) => `<td class="${i ? "n" : ""}">${c}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+const meter = (r) => (r == null ? "" : `<span class="meter"><i style="width:${Math.round(r * 100)}%"></i></span>`);
+
+// ---------- render ----------
+function render() {
+  const { overview: o, levels, signups, cohorts, projects } = state;
+  if (!o) return;
+  $("hero").textContent = fmt(o.cursus_current);
+  $("updated").textContent = o.last_sync
+    ? "Datos actualizados el " + new Date(o.last_sync).toLocaleString("es-ES", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Madrid" })
+    : "Sincronización en curso: los datos se irán completando.";
+  const tiles = [
+    [o.avg_level == null ? "–" : o.avg_level.toLocaleString("es-ES"), "nivel medio"],
+    [fmt(o.at_risk), `con blackhole en menos de ${o.risk_days} días`],
+    [fmt(o.students), "alumnos registrados"],
+    [fmt(o.cursus_ended), "con el cursus terminado"],
+  ];
+  $("tiles").innerHTML = tiles.map(([v, l]) => `<div class="tile"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+
+  if (levels && levels.length) {
+    columns($("levels"), levels.map((d) => ({ label: String(d.level), value: d.count })));
+    $("levels-table").innerHTML = table(["Nivel", "Alumnos"], levels.map((d) => [d.level, fmt(d.count)]));
+  } else $("levels").innerHTML = `<div class="empty">Aún no hay datos de niveles.</div>`;
+
+  if (signups && signups.length > 1) {
+    lineChart($("signups"), signups.map((d) => ({ month: d.month, value: d.count })));
+    $("signups-table").innerHTML = table(["Mes", "Altas"], signups.slice().reverse().map((d) => [monthLabel(d.month), fmt(d.count)]));
+  } else $("signups").innerHTML = `<div class="empty">Aún no hay datos de altas.</div>`;
+
+  $("cohorts").innerHTML = cohorts && cohorts.length
+    ? table(["Año", "Entraron", "En el cursus", "Siguen abiertos", "Retención", "Nivel medio"],
+        cohorts.map((c) => [esc(c.year), fmt(c.pool), fmt(c.in_cursus), fmt(c.current),
+          `${pct(c.retention)}${meter(c.retention)}`, c.avg_level == null ? "–" : c.avg_level.toLocaleString("es-ES")]))
+    : `<div class="empty">Aún no hay datos de promociones.</div>`;
+
+  $("projects").innerHTML = projects && projects.length
+    ? table(["Proyecto", "Intentos", "Terminados", "Validación", "Nota media"],
+        projects.map((p) => [esc(p.name), fmt(p.attempts), fmt(p.finished),
+          `${pct(p.validation_rate)}${meter(p.validation_rate)}`, p.avg_mark == null ? "–" : fmt(p.avg_mark)]))
+    : `<div class="empty">${o.project_users ? "Aún no hay proyectos con intentos suficientes." : "La carga de proyectos sigue en curso: aparecerán aquí cuando termine."}</div>`;
+}
+
+async function load() {
+  try {
+    const keys = ["overview", "levels", "signups", "cohorts", "projects"];
+    const res = await Promise.all(keys.map((k) => get("/api/" + k)));
+    keys.forEach((k, i) => (state[k] = res[i]));
+    render();
+  } catch (e) {
+    $("updated").innerHTML = `<span class="err">No se pudieron cargar los datos (${esc(e.message)}). Inténtalo de nuevo en unos minutos.</span>`;
+  }
+}
+let t; addEventListener("resize", () => { clearTimeout(t); t = setTimeout(render, 150); });
+load();
+</script>
+</body>
+</html>
