@@ -1,6 +1,7 @@
 """Modelo de datos. Solo guardamos lo necesario para las stats (sin email, teléfono ni nombres)."""
 from __future__ import annotations
 
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -66,7 +67,7 @@ class ProjectUser(Base):
     final_mark: Mapped[int | None]
     validated: Mapped[bool | None]
     current_team_id: Mapped[int | None]
-    cursus_ids: Mapped[Any] = mapped_column(JSON)
+    cursus_ids: Mapped[Any | None] = mapped_column(JSON)
     created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     marked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -93,6 +94,18 @@ def make_engine(url: str) -> Engine:
     if u.get_backend_name() == "sqlite" and u.database and u.database != ":memory:":
         Path(u.database).parent.mkdir(parents=True, exist_ok=True)
     return create_engine(url)
+
+
+def make_readonly_engine(url: str) -> Engine:
+    """Motor de solo lectura para la API: no puede modificar la BD mientras la sincronización escribe."""
+    u = make_url(url)
+    if u.get_backend_name() != "sqlite" or not u.database or u.database == ":memory:":
+        return create_engine(url)
+    path = Path(u.database).resolve().as_posix()
+    return create_engine(
+        "sqlite://",
+        creator=lambda: sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=30, check_same_thread=False),
+    )
 
 
 def init_db(engine: Engine) -> sessionmaker[Session]:

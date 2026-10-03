@@ -122,3 +122,8 @@ def test_map_project_user_extracts_nested_ids():
     })
     assert (row["user_id"], row["project_id"], row["validated"], row["cursus_ids"]) == (5, 7, True, [21])
     assert row["marked_at"].tzinfo is not None
+
+
+def test_map_project_user_tolerates_missing_cursus_ids():
+    row = map_project_user({"id": 1, "user": {"id": 5}, "project": {"id": 7}, "status": "in_progress"})
+    assert row["cursus_ids"] == []

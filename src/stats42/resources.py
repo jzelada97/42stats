@@ -65,7 +65,7 @@ def map_project_user(pu: dict) -> dict:
         "final_mark": pu.get("final_mark"),
         "validated": pu.get("validated?"),
         "current_team_id": pu.get("current_team_id"),
-        "cursus_ids": pu.get("cursus_ids"),
+        "cursus_ids": pu.get("cursus_ids") or [],  # la columna ya existente en la VM es NOT NULL
         "created_at": _dt(pu.get("created_at")),
         "marked_at": _dt(pu.get("marked_at")),
         "updated_at": _dt(pu.get("updated_at")),
