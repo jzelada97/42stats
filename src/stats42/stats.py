@@ -10,7 +10,8 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
-from .db import CursusUser, Evaluation, Event, Exam, Location, Project, ProjectUser, SyncState, User
+from .db import (CursusUser, Evaluation, Event, Exam, Location, Project, ProjectUser, Quest, QuestUser, SyncState,
+                 User)
 
 RISK_DAYS = 30
 # Un cursus cerrado cuenta como "blackholeado" si se cierra entre 1 día antes y 60 después de su fecha de
@@ -27,7 +28,8 @@ MARK_BUCKETS = [(0, 0, "0"), (1, 49, "1-49"), (50, 79, "50-79"), (80, 99, "80-99
 
 
 # Recursos que sincroniza el job; mientras alguno no tenga su primera carga completa, las cifras son parciales.
-SYNC_RESOURCES = ("users", "cursus_users", "projects", "events", "exams", "project_users", "evaluations", "locations")
+SYNC_RESOURCES = ("users", "cursus_users", "projects", "events", "exams", "quests", "quest_users", "project_users",
+                  "evaluations", "locations")
 
 
 def _now() -> datetime:
@@ -350,6 +352,76 @@ def blackholes(s: Session, cursus_id: int = 21, now: datetime | None = None, wee
         "history": [{"month": k, "count": history.get(k, 0)} for k in _last_months(24, now)],
         "history_total": sum(history.values()),
         "stale": stale,
+    }
+
+
+# ---------------------------------------------------------------- milestones (ritmo)
+
+RANK_RE = re.compile(r"^Common Core Rank (\d+)$")
+STALLED_BUCKETS = [(30, "<30 días"), (90, "30-90 días"), (180, "90-180 días"), (365, "180-365 días"),
+                   (float("inf"), ">365 días")]
+
+
+def milestones(s: Session, cursus_id: int = 21, now: datetime | None = None) -> dict:
+    """Ritmo de progreso por milestone (Common Core Rank 00..05). Solo agregados.
+
+    El deadline real de cada milestone no está en la API pública; esto mide el ritmo: en qué rank está cada
+    alumno, cuánto tarda entre ranks y cuánto lleva sin validar uno nuevo.
+    """
+    now = now or _now()
+    ranks = sorted((int(m[1]), qid, name) for qid, name in
+                   s.execute(select(Quest.id, Quest.name).where(Quest.cursus_id == cursus_id))
+                   if name and (m := RANK_RE.match(name)))
+    labels = {n: f"Rank {n:02d}" for n, _, _ in ranks}
+    empty = {"ranks": [labels[n] for n, _, _ in ranks], "students": 0, "by_rank": [], "stalled": [], "steps": []}
+    if not ranks:
+        return empty
+    rank_of = {qid: n for n, qid, _ in ranks}
+
+    members = _members(s, cursus_id, now)
+    begin = dict(s.execute(select(CursusUser.user_id, CursusUser.begin_at).where(CursusUser.cursus_id == cursus_id)).all())
+    done: dict[int, dict[int, datetime]] = defaultdict(dict)   # usuario -> rank -> primera fecha de validación
+    for uid, qid, at in s.execute(
+        select(QuestUser.user_id, QuestUser.quest_id, QuestUser.validated_at)
+        .where(QuestUser.quest_id.in_(list(rank_of)), QuestUser.validated_at.is_not(None))
+    ):
+        n, at = rank_of[qid], _aware(at)
+        if n not in done[uid] or at < done[uid][n]:   # la API duplica algunas filas: se queda la primera
+            done[uid][n] = at
+
+    # -- alumnos con el cursus abierto: rank actual y días desde el último milestone
+    by_rank: Counter = Counter()
+    stalled: Counter = Counter()
+    current = [m for m in members if m["current"]]
+    for m in current:
+        d = done.get(m["user_id"], {})
+        by_rank[max(d) if d else None] += 1
+        last = max(d.values()) if d else _aware(begin.get(m["user_id"]))
+        if last is not None:
+            days = (now - last).total_seconds() / 86400
+            stalled[next(lbl for lim, lbl in STALLED_BUCKETS if days < lim)] += 1
+
+    # -- tiempo entre milestones, con todos los alumnos que tienen ambos extremos
+    steps = []
+    firsts = [(done[m["user_id"]][ranks[0][0]] - _aware(begin[m["user_id"]])).total_seconds() / 86400
+              for m in members if m["user_id"] in done and ranks[0][0] in done[m["user_id"]]
+              and begin.get(m["user_id"]) is not None]
+    firsts = [d for d in firsts if d >= 0]
+    if firsts:
+        steps.append({"label": f"Inicio → {labels[ranks[0][0]]}", "median_days": round(statistics.median(firsts), 1), "n": len(firsts)})
+    for (a, _, _), (b, _, _) in zip(ranks, ranks[1:]):
+        gaps = [(d[b] - d[a]).total_seconds() / 86400 for d in done.values() if a in d and b in d]
+        gaps = [g for g in gaps if g >= 0]
+        if gaps:
+            steps.append({"label": f"{labels[a]} → {labels[b]}", "median_days": round(statistics.median(gaps), 1), "n": len(gaps)})
+
+    ordered = [None] + [n for n, _, _ in ranks]
+    return {
+        "ranks": [labels[n] for n, _, _ in ranks],
+        "students": len(current),
+        "by_rank": [{"label": labels[n] if n is not None else "Sin rank", "count": by_rank.get(n, 0)} for n in ordered],
+        "stalled": [{"label": lbl, "count": stalled.get(lbl, 0)} for _, lbl in STALLED_BUCKETS],
+        "steps": steps,
     }
 
 

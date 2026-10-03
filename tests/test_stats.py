@@ -8,8 +8,8 @@ from sqlalchemy.pool import StaticPool
 
 from stats42 import stats
 from stats42.api import create_app
-from stats42.db import (CursusUser, Evaluation, Event, Exam, Location, Project, ProjectUser, SyncState,
-                        User, init_db)
+from stats42.db import (CursusUser, Evaluation, Event, Exam, Location, Project, ProjectUser, Quest, QuestUser,
+                        SyncState, User, init_db)
 
 NOW = datetime(2026, 10, 3, 12, 0, tzinfo=timezone.utc)  # sábado
 UTC = timezone.utc
@@ -405,3 +405,43 @@ def test_blackholes_history_by_blackhole_month_and_stale_open_cursus(engine):
     assert months["2026-09"] == 1 and months["2025-08"] == 1 and b["history_total"] == 2
     assert len(b["history"]) == 24
     assert b["stale"] == 1          # solo el cursus 42: abierto y con fecha de blackhole pasada hace 40 días
+
+
+def test_milestones_rank_distribution_stalled_and_step_durations(engine):
+    with Session(engine) as s:
+        s.get(CursusUser, 1).begin_at = NOW - timedelta(days=150)
+        s.get(CursusUser, 2).begin_at = NOW - timedelta(days=400)
+        s.add_all([Quest(id=44, name="Common Core Rank 00", cursus_id=21), Quest(id=45, name="Common Core Rank 01", cursus_id=21),
+                   Quest(id=37, name="Common Core", cursus_id=21), Quest(id=59, name="Exam Rank 06", cursus_id=21)])
+        s.add_all([
+            QuestUser(id=1, user_id=1, quest_id=44, validated_at=NOW - timedelta(days=100)),
+            QuestUser(id=2, user_id=1, quest_id=45, validated_at=NOW - timedelta(days=40)),
+            QuestUser(id=3, user_id=1, quest_id=45, validated_at=NOW - timedelta(days=40)),     # la API duplica filas
+            QuestUser(id=4, user_id=2, quest_id=44, validated_at=NOW - timedelta(days=300)),
+            QuestUser(id=5, user_id=2, quest_id=37, validated_at=None),                           # sin validar: no cuenta
+            QuestUser(id=6, user_id=2, quest_id=59, validated_at=NOW - timedelta(days=10)),       # Exam Rank 06 no es un Common Core Rank
+        ])
+        s.commit()
+    m = run(engine, stats.milestones, 21, NOW)
+    assert m["ranks"] == ["Rank 00", "Rank 01"] and m["students"] == 2
+    assert {x["label"]: x["count"] for x in m["by_rank"]} == {"Sin rank": 0, "Rank 00": 1, "Rank 01": 1}
+    assert {x["label"]: x["count"] for x in m["stalled"]}["30-90 días"] == 1       # usuario 1: 40 días
+    assert {x["label"]: x["count"] for x in m["stalled"]}["180-365 días"] == 1     # usuario 2: 300 días
+    steps = {x["label"]: x for x in m["steps"]}
+    assert steps["Inicio → Rank 00"]["median_days"] == 75.0 and steps["Inicio → Rank 00"]["n"] == 2
+    assert steps["Rank 00 → Rank 01"]["median_days"] == 60.0 and steps["Rank 00 → Rank 01"]["n"] == 1
+    assert "user_id" not in str(m)
+
+
+def test_milestones_without_quests_is_empty_not_an_error(engine):
+    m = run(engine, stats.milestones, 21, NOW)
+    assert m["ranks"] == [] and m["by_rank"] == [] and m["steps"] == []
+
+
+def test_map_quest_and_quest_user():
+    from stats42.resources import map_quest, map_quest_user
+
+    assert map_quest({"id": 44, "name": "Common Core Rank 00", "cursus_id": 21, "position": 10})["name"] == "Common Core Rank 00"
+    row = map_quest_user({"id": 7, "quest_id": 44, "user": {"id": 5, "login": "x"}, "validated_at": "2026-09-25T17:52:26.000Z"})
+    assert (row["user_id"], row["quest_id"]) == (5, 44) and row["validated_at"].tzinfo is not None
+    assert "login" not in row
