@@ -1,0 +1,17 @@
+# Despliegue en la VM. La sincronización se lanza bajo demanda (la programa el timer de
+# systemd, ver deploy/):  docker compose -f docker-compose.vm.yml run --rm sync
+# Límites de recursos: la VM comparte 2 núcleos con otros proyectos.
+services:
+  sync:
+    build: .
+    image: stats42:latest
+    env_file: .env
+    volumes:
+      - stats42_data:/data
+    command: ["sync", "-v"]
+    restart: "no"
+    cpus: "0.5"
+    mem_limit: 512m
+
+volumes:
+  stats42_data:
