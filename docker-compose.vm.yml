@@ -1,7 +1,31 @@
-# Despliegue en la VM. La sincronización se lanza bajo demanda (la programa el timer de
-# systemd, ver deploy/):  docker compose -f docker-compose.vm.yml run --rm sync
+# Despliegue en la VM.
+#  - web:  API + web, siempre encendida:  docker compose -f docker-compose.vm.yml up -d web
+#  - sync: sincronización con la API de 42, bajo demanda (la programa el timer de systemd,
+#          ver deploy/):  docker compose -f docker-compose.vm.yml run --rm sync
+#
+# Reglas de la VM (~/infra/caddy/PORTS.md): no se publica ningún puerto en el host; Caddy
+# alcanza `web` por su nombre de contenedor en la red externa `proxy`.
 # Límites de recursos: la VM comparte 2 núcleos con otros proyectos.
 services:
+  web:
+    build: .
+    image: stats42:latest
+    container_name: stats42-api       # nombre único en la VM (lo usa Caddy)
+    command: ["serve", "--port", "8042"]
+    volumes:
+      - stats42_data:/data
+    networks:
+      proxy:
+        aliases: [stats42-api]
+    restart: unless-stopped
+    cpus: "0.5"
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8042/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
   sync:
     build: .
     image: stats42:latest
@@ -15,3 +39,7 @@ services:
 
 volumes:
   stats42_data:
+
+networks:
+  proxy:
+    external: true

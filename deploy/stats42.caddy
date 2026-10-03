@@ -1,0 +1,9 @@
+# 42stats. Copiar a ~/infra/caddy/sites/stats42.caddy y recargar:
+#   docker exec caddy caddy reload --config /etc/caddy/Caddyfile
+# Upstream por nombre de contenedor/alias único (ver ~/infra/caddy/PORTS.md): stats42-api:8042, red `proxy`.
+# La app solo sirve agregados (sin personas), por eso se registran las peticiones con normalidad.
+
+42madrid.zelada.es, 42madrid.api.zelada.es {
+	encode gzip
+	reverse_proxy stats42-api:8042
+}
