@@ -327,9 +327,14 @@ def blackholes(s: Session, cursus_id: int = 21, now: datetime | None = None, wee
     now = now or _now()
     monday = (now - timedelta(days=now.weekday())).date()
     buckets: Counter = Counter()
-    later = 0
+    history: Counter = Counter()
+    later = stale = 0
     for m in _members(s, cursus_id, now):
         bh = m["blackholed_at"]
+        if m["outcome"] == "blackholed" and bh is not None:
+            history[bh.strftime("%Y-%m")] += 1
+        if m["current"] and bh is not None and bh < now - timedelta(days=1):
+            stale += 1  # cursus abierto con fecha de blackhole ya pasada: no se sabe si es un blackhole real
         if not m["current"] or bh is None or bh < now:
             continue
         idx = (bh.date() - monday).days // 7
@@ -341,6 +346,10 @@ def blackholes(s: Session, cursus_id: int = 21, now: datetime | None = None, wee
         "weeks": [{"week": (monday + timedelta(weeks=i)).isoformat(), "count": buckets.get(i, 0)} for i in range(weeks)],
         "later": later,
         "upcoming": sum(buckets.values()) + later,
+        # blackholeados por MES DE LA FECHA DE BLACKHOLE (no por año de piscina), últimos 24 meses
+        "history": [{"month": k, "count": history.get(k, 0)} for k in _last_months(24, now)],
+        "history_total": sum(history.values()),
+        "stale": stale,
     }
 
 

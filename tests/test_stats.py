@@ -389,3 +389,19 @@ def test_projects_by_cursus_applies_thresholds_and_ignores_cheating(engine):
     assert run(engine, stats.projects_by_cursus, min_attempts=1, min_cursus_attempts=1000) == []
     assert run(engine, stats.projects_by_cursus, min_attempts=50, min_cursus_attempts=1) == []   # ningún proyecto llega a 50
     assert g[0]["names"] == ["Cursus 21"]                   # sin nombre en el catálogo: se muestra el id
+
+
+def test_blackholes_history_by_blackhole_month_and_stale_open_cursus(engine):
+    with Session(engine) as s:
+        s.add_all([user(30, "2023"), user(31, "2023"), user(32, "2023")])
+        s.add_all([
+            cu(40, 30, 1.0, end_at=NOW - timedelta(days=9), bh=NOW - timedelta(days=10)),   # blackholeado hace 10 días
+            cu(41, 31, 1.0, end_at=NOW - timedelta(days=400), bh=NOW - timedelta(days=401)),  # blackholeado hace más de un año
+            cu(42, 32, 6.0, bh=NOW - timedelta(days=40)),                                   # abierto con blackhole pasado: "stale"
+        ])
+        s.commit()
+    b = run(engine, stats.blackholes, 21, NOW, 4)
+    months = {h["month"]: h["count"] for h in b["history"]}
+    assert months["2026-09"] == 1 and months["2025-08"] == 1 and b["history_total"] == 2
+    assert len(b["history"]) == 24
+    assert b["stale"] == 1          # solo el cursus 42: abierto y con fecha de blackhole pasada hace 40 días
