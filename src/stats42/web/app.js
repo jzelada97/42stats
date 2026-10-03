@@ -182,7 +182,7 @@ const waiting = "Aún no hay datos: la carga inicial sigue en curso.";
 
 /* ---------------------------------------------------------------- secciones */
 const RES_NAMES = { users: "alumnos", cursus_users: "cursus", projects: "proyectos", events: "eventos", exams: "exámenes",
-  project_users: "intentos de proyecto", evaluations: "evaluaciones", locations: "sesiones de ordenador" };
+  project_users: "intentos de proyecto", quests: "milestones", quest_users: "milestones de alumnos", evaluations: "evaluaciones", locations: "sesiones de ordenador" };
 
 function renderOverview(o) {
   const loading = $("loading");
@@ -248,6 +248,22 @@ function renderBlackholeHistory(b) {
   $("bh-stale").textContent = b.stale
     ? `No se cuentan ${fmt(b.stale)} alumnos con el cursus abierto y una fecha de blackhole ya pasada. Casi todos siguen activos: esa fecha no refleja su deadline real (milestones, freeze), que la API pública no expone.`
     : "";
+}
+
+function renderMilestones(m) {
+  const ids = ["rank-dist", "rank-stalled"];
+  if (!m.ranks.length || !m.students) { empty([...ids, "rank-steps"], "Aún no hay datos de milestones: la carga de quests sigue en curso."); return; }
+  columns($("rank-dist"), m.by_rank.map((x) => ({ label: x.label.replace("Rank ", "R"), full: x.label, value: x.count })), {
+    labelEvery: 1, tip: (x) => `${esc(x.full)}: <b>${fmt(x.value)}</b> alumnos`,
+  });
+  $("rank-dist-table").innerHTML = table(["Rank actual", "Alumnos"], m.by_rank.map((x) => [esc(x.label), fmt(x.count)]));
+  columns($("rank-stalled"), m.stalled.map((x) => ({ label: x.label.replace(" días", "d"), full: x.label, value: x.count })), {
+    labelEvery: 1, tip: (x) => `${esc(x.full)}: <b>${fmt(x.value)}</b> alumnos`,
+  });
+  $("rank-stalled-table").innerHTML = table(["Sin validar desde hace", "Alumnos"], m.stalled.map((x) => [esc(x.label), fmt(x.count)]));
+  m.steps.length
+    ? hbars($("rank-steps"), m.steps.map((x) => ({ name: x.label, value: x.median_days, text: `${fmt1(x.median_days)} días · ${fmt(x.n)} alumnos` })))
+    : empty(["rank-steps"], waiting);
 }
 
 function renderAttendance(a) {
@@ -364,6 +380,7 @@ load("/api/overview", renderOverview, ["tiles"]);
 load("/api/levels", renderLevels, ["levels"]);
 load("/api/signups", renderSignups, ["signups"]);
 load("/api/cohorts", renderCohorts, ["cohorts"]);
+load("/api/milestones", renderMilestones, ["rank-dist", "rank-stalled", "rank-steps"]);
 get("/api/blackholes").then((b) => { renderBlackholes(b); renderBlackholeHistory(b); })
   .catch((e) => empty(["blackholes", "bh-history"], `No se pudieron cargar estos datos (${esc(e.message)}).`));
 load("/api/attendance", renderAttendance, ["heatmap", "daily", "durations", "seatmap"]);

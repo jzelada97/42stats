@@ -14,6 +14,7 @@
     <a class="brand" href="#resumen">42 Madrid<small>/ campus 22</small></a>
     <nav aria-label="Secciones">
       <a href="#resumen">Resumen</a>
+      <a href="#ritmo">Ritmo</a>
       <a href="#asistencia">Asistencia</a>
       <a href="#proyectos">Proyectos</a>
       <a href="#evaluaciones">Evaluaciones</a>
@@ -67,6 +68,37 @@
       <h3>Promociones</h3>
       <p class="sub">Agrupado por año de piscina (cuándo entraron), no por fecha de blackhole: los de la piscina más reciente aún no pueden estar blackholeados. «Blackholeados»: cursus cerrado entre 1 día antes y 60 después de su fecha de blackhole. «Baja antes»: cursus cerrado más de 1 día antes de esa fecha.</p>
       <div class="wrap" id="cohorts"></div>
+    </div>
+  </section>
+
+  <!-- ======================= RITMO ======================= -->
+  <section id="ritmo" aria-labelledby="h-ritmo">
+    <div>
+      <div class="kicker">42cursus / milestones</div>
+      <h2 id="h-ritmo">A qué ritmo avanzan</h2>
+      <p class="lead">Los milestones son los Common Core Rank 00 a 05. El deadline de cada uno y los freezes no están en la API pública de 42, así que esto mide el ritmo, no los días que quedan.</p>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h3>En qué rank están</h3>
+        <p class="sub">Alumnos con el cursus abierto, según el último Common Core Rank validado.</p>
+        <div class="chart" id="rank-dist"></div>
+        <details><summary>Ver como tabla</summary><div class="wrap" id="rank-dist-table"></div></details>
+      </div>
+      <div class="card">
+        <h3>Cuánto llevan sin validar un milestone</h3>
+        <p class="sub">Días desde el último rank validado (o desde que empezaron, si aún no tienen ninguno).</p>
+        <div class="chart" id="rank-stalled"></div>
+        <details><summary>Ver como tabla</summary><div class="wrap" id="rank-stalled-table"></div></details>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Cuánto tardan entre milestones</h3>
+      <p class="sub">Mediana de días entre un rank y el siguiente, con todos los alumnos que validaron ambos.</p>
+      <div class="hbars" id="rank-steps"></div>
+    </div>
+    <div class="notice-soft">
+      <b>Próximamente:</b> inicia sesión con tu cuenta de 42 para ver tu ritmo frente a tu promoción. Si 42 lo permite, también tu freeze y tu deadline; si no, podrás indicar tu deadline a mano.
     </div>
   </section>
 
