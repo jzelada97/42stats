@@ -2,7 +2,7 @@
 
 /* Toda cadena que viene de otros alumnos se pinta con textContent (h()), nunca como HTML. Los enlaces pasan por safeUrl(). */
 
-const state = { overview: null, resources: null, cursus: undefined, chosen: new Set() };
+const state = { overview: null, resources: null, rank: undefined, chosen: new Set() };
 
 function h(tag, props = {}, ...kids) {
   const e = document.createElement(tag);
@@ -32,32 +32,31 @@ const wantedProject = (() => { const v = Number(new URLSearchParams(location.sea
 
 function fillSelect(sel, items, { general = false, only = null, selected = null } = {}) {
   clear(sel);
-  if (general) sel.append(h("option", { value: "" }, "General (todo el cursus)"));
+  if (general) sel.append(h("option", { value: "" }, "General (todo el círculo)"));
   for (const it of items) if (!only || only.has(it.id)) sel.append(h("option", { value: String(it.id) }, it.name));
   if (selected != null && [...sel.options].some((o) => o.value === String(selected))) sel.value = String(selected);
 }
 
-/* Cursus activo: todos los desplegables solo muestran los proyectos de ese cursus (null = "Otros", sin cursus conocido). */
-const inCursus = (p) => p.cursus_id === state.cursus;
-const projectsHere = () => state.overview.projects.filter(inCursus);
+/* Círculo activo: todos los desplegables de proyectos solo muestran los de ese círculo (null = "Sin rank"). */
+const inRank = (p) => p.rank === state.rank;
+const projectsHere = () => state.overview.projects.filter(inRank);
 
-function renderChips() {
-  document.querySelector(".cursus-bar").hidden = state.overview.cursus.length <= 1;      // con un solo cursus no hay nada que elegir
-  const box = clear(document.getElementById("cursus-chips"));
-  for (const c of state.overview.cursus) {
-    const on = c.id === state.cursus;
-    const b = h("button", { type: "button", class: on ? "chip-btn on" : "chip-btn", "aria-pressed": String(on) }, c.name, h("small", {}, " " + Number(c.projects)));
-    b.addEventListener("click", () => { state.cursus = c.id; renderCursus().catch(() => {}); });
-    box.append(b);
-  }
+function renderRankSelect() {
+  const sel = clear(document.getElementById("rank-select"));
+  for (const r of state.overview.ranks) sel.append(h("option", { value: r.id == null ? "none" : String(r.id) }, r.name + " (" + Number(r.projects) + ")"));
+  sel.value = state.rank == null ? "none" : String(state.rank);
 }
+document.getElementById("rank-select").addEventListener("change", (e) => {
+  state.rank = e.target.value === "none" ? null : Number(e.target.value);
+  renderRank().catch(() => {});
+});
 
-async function renderCursus() {
+async function renderRank() {
   const o = state.overview;
   const here = projectsHere();
   const unvalidated = new Set(here.filter((p) => !o.validated.some((v) => v.id === p.id)).map((p) => p.id));
   const keep = (id) => Number(document.getElementById(id).value) || wantedProject;
-  renderChips();
+  renderRankSelect();
   fillSelect(document.getElementById("res-project"), here, { general: true, selected: keep("res-project") });
   fillSelect(document.getElementById("rf-project"), here, { general: true, selected: wantedProject });
   fillSelect(document.getElementById("mentor-project"), here, { selected: keep("mentor-project") });
@@ -70,7 +69,7 @@ async function renderCursus() {
 async function loadResources() {
   const sel = document.getElementById("res-project");
   const pid = sel.value ? Number(sel.value) : null;
-  const query = pid ? `?project_id=${pid}` : (state.cursus ? "?cursus_id=" + Number(state.cursus) : "");
+  const query = pid ? `?project_id=${pid}` : (state.rank != null ? "?rank=" + Number(state.rank) : "");
   const d = await api("/api/help/resources" + query);
   const ul = clear(document.getElementById("res-list"));
   if (!d.resources.length) ul.append(h("li", { class: "empty" }, "Aún no hay recursos aprobados para este proyecto. Propón el primero."));
@@ -123,17 +122,18 @@ document.getElementById("mentor-project").addEventListener("change", () => loadM
 function renderOffer(o) {
   const box = document.getElementById("offer-projects");
   [...box.querySelectorAll("label, p")].forEach((l) => l.remove());
-  const here = o.validated.filter(inCursus);
+  const here = o.validated.filter((v) => v.in_help && inRank(v));
+  const offerable = o.validated.filter((v) => v.in_help);
   if (!o.validated.length) box.append(h("p", { class: "sub" }, "Aún no tenemos proyectos validados tuyos. Cuando valides alguno podrás ofrecer ayuda."));
-  else if (!here.length) box.append(h("p", { class: "sub" }, "No tienes proyectos validados en este cursus. Cambia de cursus arriba para ver los demás."));
-  const hidden = o.validated.length - here.length;
+  else if (!here.length) box.append(h("p", { class: "sub" }, offerable.length ? "No tienes proyectos validados en este círculo. Cambia de círculo arriba para ver los demás." : "Ninguno de tus proyectos validados tiene sección de ayuda."));
+  const hidden = offerable.length - here.length;
   for (const v of here) {
     const cb = h("input", { type: "checkbox", value: String(v.id), name: "offer-project" });
     cb.checked = state.chosen.has(v.id);
     cb.addEventListener("change", () => { if (cb.checked) state.chosen.add(v.id); else state.chosen.delete(v.id); });
     box.append(h("label", { class: "check" }, cb, " ", v.name, v.mark != null ? h("span", { class: "m" }, " (nota " + v.mark + ")") : ""));
   }
-  if (hidden > 0 && here.length) box.append(h("p", { class: "sub" }, "Y " + hidden + " validados en otros cursus (lo que hayas elegido allí se conserva)."));
+  if (hidden > 0 && here.length) box.append(h("p", { class: "sub" }, "Y " + hidden + " validados en otros círculos (lo que hayas elegido allí se conserva)."));
   document.getElementById("offer-note").value = o.offer ? o.offer.note : "";
   document.getElementById("offer-active").checked = o.offer ? o.offer.active : true;
 }
@@ -167,7 +167,10 @@ function renderRequests(o) {
   const mine = clear(document.getElementById("my-requests"));
   if (!o.requests.length) mine.append(h("li", { class: "empty" }, "No tienes peticiones abiertas."));
   for (const r of o.requests) mine.append(requestItem(r, { closable: true }));
-  document.getElementById("incoming-card").hidden = !o.incoming.length;
+  const mentor = !!(o.offer && o.offer.active && o.offer.project_ids.length);
+  document.getElementById("incoming-note").textContent = !mentor
+    ? "Para ver las peticiones, ofrécete como mentor en un proyecto que ya hayas validado (arriba, en Mentoría)."
+    : (o.incoming.length ? "" : "Ahora mismo nadie pide ayuda en tus proyectos.");
   const inc = clear(document.getElementById("incoming"));
   for (const r of o.incoming) inc.append(requestItem(r, { closable: false }));
 }
@@ -215,13 +218,14 @@ async function refresh() {
   const o = await api("/api/help/overview");
   state.overview = o;
   state.chosen = new Set(o.offer ? o.offer.project_ids : []);
-  if (state.cursus === undefined || !o.cursus.some((c) => c.id === state.cursus)) {      // primera carga: el del proyecto enlazado o el principal
+  if (state.rank === undefined || !o.ranks.some((r) => r.id === state.rank)) {      // primera carga: el del proyecto enlazado, el de tu proyecto en curso o el primero
     const linked = o.projects.find((p) => p.id === wantedProject);
-    state.cursus = linked ? linked.cursus_id : (o.cursus.some((c) => c.id === o.default_cursus) ? o.default_cursus : (o.cursus[0] ? o.cursus[0].id : null));
+    const mine = o.ranks.some((r) => r.id === o.default_rank) ? o.default_rank : (o.ranks[0] ? o.ranks[0].id : null);
+    state.rank = linked ? linked.rank : mine;
   }
   renderRequests(o);
   document.getElementById("moderacion").hidden = !o.is_admin;
-  await Promise.all([renderCursus(), o.is_admin ? loadPending() : null, o.is_admin ? loadAbuse() : null]);
+  await Promise.all([renderRank(), o.is_admin ? loadPending() : null, o.is_admin ? loadAbuse() : null]);
 }
 
 refresh().catch((e) => { document.getElementById("h-ayuda").textContent = `No se pudo cargar la sección de ayuda (${e.message}).`; });

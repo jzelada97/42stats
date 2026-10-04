@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 import time
 import unicodedata
 from datetime import datetime, timedelta, timezone
@@ -24,8 +24,8 @@ from sqlalchemy import func, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
-from .stats import _cursus_names
-from .db import (AbuseEvent, CursusUser, HelpRequest, LearningResource, MentorOffer, MentorProject, Project, ProjectUser)
+from .stats import RANK_RE
+from .db import (AbuseEvent, CursusUser, Quest, QuestUser, HelpRequest, LearningResource, MentorOffer, MentorProject, Project, ProjectUser)
 from .ratelimit import RateLimiter
 
 KINDS = ("guía", "vídeo", "documentación", "herramienta", "otro")
@@ -157,19 +157,59 @@ def project_options(ms: Session, cursus_id: int | None = None) -> list[dict]:
     primary = {pid: min(c.items(), key=lambda kv: (-kv[1], kv[0]))[0] for pid, c in seen.items()}
     if cursus_id is not None:
         rows = [r for r in rows if primary.get(r[0]) == cursus_id]
-    rows.sort(key=lambda r: (r[2] is None, r[2] or 0, r[1].lower()))
-    return [{"id": i, "name": n, "cursus_id": primary.get(i)} for i, n, _ in rows]
+    rank = project_ranks(ms, [r[0] for r in rows], cursus_id) if cursus_id is not None else {}
+    rows.sort(key=lambda r: (rank.get(r[0]) is None, rank.get(r[0], 0), r[2] is None, r[2] or 0, r[1].lower()))
+    return [{"id": i, "name": n, "cursus_id": primary.get(i), "rank": rank.get(i)} for i, n, _ in rows]
 
 
-def cursus_groups(ms: Session, projects: list[dict], default_id: int) -> list[dict]:
-    """Cursus que tienen proyectos, con el principal primero y 'Otros' (sin cursus conocido) al final."""
-    names = _cursus_names(ms)
-    count = Counter(p["cursus_id"] for p in projects)
-    ordered = sorted((c for c in count if c is not None), key=lambda c: (c != default_id, -count[c], c))
-    groups = [{"id": c, "name": names.get(c, f"Cursus {c}"), "projects": count[c]} for c in ordered]
+MIN_RANK_VOTES = 3
+
+
+def project_ranks(ms: Session, project_ids: list[int], cursus_id: int) -> dict[int, int]:
+    """Círculo (Common Core Rank) de cada proyecto, sacado de los datos: el rank que el alumno validó justo DESPUÉS de validar
+    el proyecto, y se queda el más habitual entre alumnos. Sin al menos MIN_RANK_VOTES casos, el proyecto no tiene círculo."""
+    rank_of = {qid: int(m[1]) for qid, name in ms.execute(select(Quest.id, Quest.name).where(Quest.cursus_id == cursus_id))
+               if name and (m := RANK_RE.match(name))}
+    if not rank_of or not project_ids:
+        return {}
+    done: dict[int, dict[int, datetime]] = defaultdict(dict)
+    for uid, qid, at in ms.execute(select(QuestUser.user_id, QuestUser.quest_id, QuestUser.validated_at)
+                                   .where(QuestUser.quest_id.in_(list(rank_of)), QuestUser.validated_at.is_not(None))):
+        n, at = rank_of[qid], aware(at)
+        if n not in done[uid] or at < done[uid][n]:
+            done[uid][n] = at
+    votes: dict[int, Counter] = {}
+    for pid, uid, marked in ms.execute(select(ProjectUser.project_id, ProjectUser.user_id, ProjectUser.marked_at)
+                                       .where(ProjectUser.validated.is_(True), ProjectUser.project_id.in_(project_ids),
+                                              ProjectUser.marked_at.is_not(None))):
+        later = [(at, n) for n, at in done.get(uid, {}).items() if at >= aware(marked)]
+        if later:
+            votes.setdefault(pid, Counter())[min(later)[1]] += 1
+    out = {}
+    for pid, c in votes.items():
+        n, count = min(c.items(), key=lambda kv: (-kv[1], kv[0]))
+        if count >= MIN_RANK_VOTES:
+            out[pid] = n
+    return out
+
+
+def rank_groups(projects: list[dict]) -> list[dict]:
+    """Círculos (ranks) que tienen proyectos, en orden, y 'Sin rank' al final para los que no se pueden situar."""
+    count = Counter(p["rank"] for p in projects)
+    groups = [{"id": n, "name": f"Rank {n:02d}", "projects": count[n]} for n in sorted(k for k in count if k is not None)]
     if None in count:
-        groups.append({"id": None, "name": "Otros", "projects": count[None]})
+        groups.append({"id": None, "name": "Sin rank", "projects": count[None]})
     return groups
+
+
+def default_rank(ms: Session, uid: int, projects: list[dict], validated: dict) -> int | None:
+    """El círculo donde está trabajando: el de su proyecto en curso o, si no, el primero con algo que aún no ha validado."""
+    by_id = {p["id"]: p for p in projects}
+    for (pid,) in ms.execute(select(ProjectUser.project_id).where(ProjectUser.user_id == uid, ProjectUser.status == "in_progress")):
+        if pid in by_id and by_id[pid]["rank"] is not None:
+            return by_id[pid]["rank"]
+    todo = [p["rank"] for p in projects if p["rank"] is not None and p["id"] not in validated]
+    return min(todo) if todo else None
 
 
 def validated_projects(ms: Session, user_id: int) -> dict[int, dict]:
@@ -343,9 +383,9 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
             return {
                 "is_admin": is_admin(u),
                 "projects": options(ms),
-                "cursus": cursus_groups(ms, options(ms), cursus_id),
-                "default_cursus": cursus_id,
-                "validated": sorted(({**v, "cursus_id": by_id.get(v["id"], {}).get("cursus_id")} for v in validated.values()),
+                "ranks": rank_groups(options(ms)),
+                "default_rank": default_rank(ms, uid, options(ms), validated),
+                "validated": sorted(({**v, "rank": by_id.get(v["id"], {}).get("rank"), "in_help": v["id"] in by_id} for v in validated.values()),
                                     key=lambda v: v["name"]),
                 "offer": {"active": offer.active, "note": offer.note, "project_ids": sorted(offered)} if offer else None,
                 "requests": mine,
@@ -363,7 +403,7 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
 
     @app.get("/api/help/resources", dependencies=guard)
     def resources(request: Request, project_id: Annotated[int | None, Query(ge=1, le=MAX_ID)] = None,
-                  cursus_id: Annotated[int | None, Query(ge=1, le=MAX_ID)] = None):
+                  rank: Annotated[int | None, Query(ge=0, le=99)] = None):
         u = current_user(request)
         if u is None:
             return unauth()
@@ -372,9 +412,9 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
             stmt = select(LearningResource).where(LearningResource.status == "approved")
             if project_id is not None:
                 stmt = stmt.where((LearningResource.project_id == project_id) | LearningResource.project_id.is_(None))
-            elif cursus_id is not None:             # todo un cursus: sus proyectos y lo general
-                of_cursus = [o["id"] for o in options(ms) if o["cursus_id"] == cursus_id]
-                stmt = stmt.where(LearningResource.project_id.in_(of_cursus) | LearningResource.project_id.is_(None))
+            elif rank is not None:                  # todo un círculo: sus proyectos y lo general
+                of_rank = [o["id"] for o in options(ms) if o["rank"] == rank]
+                stmt = stmt.where(LearningResource.project_id.in_(of_rank) | LearningResource.project_id.is_(None))
             rows = db.execute(stmt.order_by(LearningResource.created_at.desc()).limit(60)).scalars().all()
             mine = db.execute(select(LearningResource).where(LearningResource.submitted_by == u["uid"], LearningResource.status != "approved")
                               .order_by(LearningResource.created_at.desc()).limit(10)).scalars().all()

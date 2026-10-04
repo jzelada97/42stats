@@ -17,6 +17,7 @@
       <a href="/campus">Campus</a>
       <a href="#recursos">Recursos</a>
       <a href="#mentoria">Mentoría</a>
+      <a href="#peticiones">Peticiones</a>
       <a href="#pedir">Pedir ayuda</a>
     </nav>
     <a id="auth-link" class="auth-link" href="/me">Mi panel</a>
@@ -38,9 +39,9 @@
     </div>
   </section>
 
-  <div class="cursus-bar" role="group" aria-label="Cursus">
-    <span class="sub">Cursus</span>
-    <div class="chips" id="cursus-chips"></div>
+  <div class="cursus-bar">
+    <label class="inline" for="rank-select">Círculo <select id="rank-select"></select></label>
+    <span class="sub">Elige el círculo y cada desplegable de proyectos mostrará solo los suyos.</span>
   </div>
 
   <!-- ======================= RECURSOS ======================= -->
@@ -94,8 +95,14 @@
         </form>
       </div>
     </div>
-    <div class="card" id="incoming-card" hidden>
-      <h3>Piden ayuda en lo que tú validaste</h3>
+  </section>
+
+  <!-- ======================= PETICIONES DE OTROS ======================= -->
+  <section id="peticiones" aria-labelledby="h-inc">
+    <div><div class="kicker">peticiones</div><h2 id="h-inc">Peticiones de otros alumnos</h2>
+      <p class="sub">Alumnos que piden ayuda en proyectos que tú ya validaste. Solo las ven quienes se han ofrecido como mentores en ese proyecto.</p></div>
+    <div class="card">
+      <p class="sub" id="incoming-note" role="status"></p>
       <ul class="list requests" id="incoming"></ul>
     </div>
   </section>
@@ -110,7 +117,7 @@
           <label for="req-project">Proyecto <select id="req-project"></select></label>
           <label for="req-message">Tu pregunta <textarea id="req-message" rows="4" maxlength="280"
             placeholder="Llevo 3 días con get_next_line: no entiendo por qué se pierde el resto del buffer entre llamadas."></textarea></label>
-          <div class="row"><span class="sub" id="req-count">0 / 280</span></div>
+          <div class="row"><span class="sub" id="req-count">0 / 280</span><span class="sub">Los mentores de este proyecto verán tu login y tu mensaje.</span></div>
           <div class="row"><button class="btn small" type="submit">Pedir ayuda</button><span class="sub" id="req-msg" role="status"></span></div>
         </form>
       </div>
