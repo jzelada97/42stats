@@ -35,8 +35,13 @@ ejecución solo trae lo modificado desde la última (con 1 día de solape).
 
 ## Privacidad
 
-No se guardan emails, teléfonos ni nombres. El detalle individual solo debe mostrarse al propio
-alumno (login con 42); del resto del campus, solo agregados.
+No se guardan emails, teléfonos ni nombres. El detalle individual solo se muestra al propio alumno
+(login con 42); del resto del campus, solo agregados.
+
+**Nada es público salvo el login.** Las estadísticas del campus (`/campus` y todas las rutas `/api/*` de datos) solo
+responden a una sesión válida de un alumno que entró con 42 y está en los datos del campus de Madrid. Algunas cifras
+agregadas (p. ej. a qué horas está vacío el edificio) no deben ser públicas. `FT_REQUIRE_LOGIN=0` lo desactiva solo para
+desarrollo local. Las páginas llevan `noindex` y `robots.txt` lo prohíbe todo.
 
 ## Login con 42 y panel personal
 
