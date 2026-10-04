@@ -36,7 +36,7 @@
       <p class="updated" id="updated">cargando…</p>
     </div>
     <div class="card raise hero">
-      <div><div class="hero-num" id="hero">–</div><div class="sub">alumnos con el 42cursus abierto</div></div>
+      <div><div class="hero-num" id="hero">–</div><div class="sub">alumnos activos en el 42cursus</div></div>
       <div class="tiles" id="tiles"></div>
     </div>
     <div class="grid2">
@@ -60,15 +60,15 @@
       <details><summary>Ver como tabla</summary><div class="wrap" id="blackholes-table"></div></details>
     </div>
     <div class="card">
-      <h3>Blackholeados por mes</h3>
-      <p class="sub">Alumnos cuyo cursus se cerró por blackhole, según el mes de su fecha de blackhole (últimos 24 meses).</p>
+      <h3>Cursus cerrados por mes</h3>
+      <p class="sub">Alumnos cuyo cursus se cerró sin graduarse, por mes de cierre (últimos 24 meses).</p>
       <div class="chart" id="bh-history"></div>
       <p class="sub" id="bh-stale"></p>
       <details><summary>Ver como tabla</summary><div class="wrap" id="bh-history-table"></div></details>
     </div>
     <div class="card">
       <h3>Promociones</h3>
-      <p class="sub">Agrupado por año de piscina (cuándo entraron), no por fecha de blackhole: los de la piscina más reciente aún no pueden estar blackholeados. «Blackholeados»: cursus cerrado entre 1 día antes y 60 después de su fecha de blackhole. «Baja antes»: cursus cerrado más de 1 día antes de esa fecha.</p>
+      <p class="sub">Agrupado por año de piscina. «Activos»: cursus abierto sin graduarse. «Graduados»: alumni. «Cerraron sin graduarse»: cursus cerrado; en 42 no existe la baja voluntaria (quien se va deja de venir y acaba blackholeado), así que son casi todos blackholes, aunque la fecha de la API es orientativa. Las promociones recientes aún están dentro de plazo.</p>
       <div class="wrap" id="cohorts"></div>
     </div>
   </section>

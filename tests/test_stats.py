@@ -304,8 +304,8 @@ def test_blackholes_by_week_counts_only_open_cursus_and_future_dates(engine):
         s.commit()
     b = run(engine, stats.blackholes, 21, NOW, 26)
     counts = {w["week"]: w["count"] for w in b["weeks"]}
-    assert len(b["weeks"]) == 26 and b["later"] == 2        # el 2 (+200 d) y el nuevo (+400 d)
-    assert sum(counts.values()) == 3 and b["upcoming"] == 5
+    assert len(b["weeks"]) == 26 and b["later"] == 1        # solo el 2 (+200 d): el de staff (+400 d) no es un alumno y no cuenta
+    assert sum(counts.values()) == 3 and b["upcoming"] == 4
     assert "user_id" not in str(b)
 
 
@@ -394,7 +394,7 @@ def test_projects_by_cursus_applies_thresholds_and_ignores_cheating(engine):
     assert g[0]["names"] == ["Cursus 21"]                   # sin nombre en el catálogo: se muestra el id
 
 
-def test_blackholes_history_by_blackhole_month_and_stale_open_cursus(engine):
+def test_closed_cursus_history_by_closure_month_and_stale_open_cursus(engine):
     with Session(engine) as s:
         s.add_all([user(30, "2023"), user(31, "2023"), user(32, "2023")])
         s.add_all([
@@ -405,7 +405,8 @@ def test_blackholes_history_by_blackhole_month_and_stale_open_cursus(engine):
         s.commit()
     b = run(engine, stats.blackholes, 21, NOW, 4)
     months = {h["month"]: h["count"] for h in b["history"]}
-    assert months["2026-09"] == 1 and months["2025-08"] == 1 and b["history_total"] == 2
+    # por mes de CIERRE: el terminado del fixture (hace 5 días) y el de hace 9 días caen en septiembre; el de hace 400 días, en agosto de 2025
+    assert months["2026-09"] == 2 and months["2025-08"] == 1 and b["history_total"] == 3
     assert len(b["history"]) == 24
     assert b["stale"] == 1          # solo el cursus 42: abierto y con fecha de blackhole pasada hace 40 días
 
@@ -448,3 +449,48 @@ def test_map_quest_and_quest_user():
     row = map_quest_user({"id": 7, "quest_id": 44, "user": {"id": 5, "login": "x"}, "validated_at": "2026-09-25T17:52:26.000Z"})
     assert (row["user_id"], row["quest_id"]) == (5, 44) and row["validated_at"].tzinfo is not None
     assert "login" not in row
+
+
+
+# ---------------------------------------------------------------- quién cuenta como alumno y quién se graduó
+
+def test_staff_and_external_accounts_never_count_as_students_of_the_cursus(engine):
+    with Session(engine) as s:
+        s.add_all([user(50, "2024", kind="admin"), user(51, "2024", kind="external")])
+        s.add_all([cu(60, 50, 9.0), cu(61, 51, 9.0, end_at=NOW - timedelta(days=30), bh=NOW - timedelta(days=31))])
+        s.commit()
+    o = run(engine, stats.overview, 21, NOW)
+    assert o["cursus_members"] == 3 and o["cursus_current"] == 2                     # solo los tres alumnos del fixture
+    assert o["cursus_closed"] == 1 and o["cursus_blackholed"] == 0                   # solo el terminado del fixture: la cuenta externa «cerrada» no cuenta
+
+
+def test_graduated_students_are_not_active_and_are_counted_apart(engine):
+    with Session(engine) as s:
+        grad = user(70, "2023")
+        grad.alumni = True
+        s.add(grad)
+        s.add(cu(70, 70, 21.0))                                                       # alumni: el cursus sigue «abierto» (sin fecha de cierre)
+        s.commit()
+    o = run(engine, stats.overview, 21, NOW)
+    assert o["cursus_graduated"] == 1 and o["cursus_current"] == 2 and o["cursus_members"] == 4
+    assert o["avg_level"] == round((3.4 + 0.9) / 2, 2)                               # el nivel medio no incluye al graduado
+    assert all(row["count"] == 0 for row in run(engine, stats.levels, 21, NOW) if row["level"] == 21)
+    c = {x["year"]: x for x in run(engine, stats.cohorts, 21, NOW)}["2023"]
+    assert (c["in_cursus"], c["current"], c["graduated"], c["closed"], c["retention"]) == (1, 0, 1, 0, 1.0)
+
+
+def test_every_closure_without_graduating_counts_as_closed_whatever_the_api_date_says(engine):
+    with Session(engine) as s:
+        s.add_all([user(i, "2022") for i in (80, 81, 82, 83)])
+        s.add_all([
+            cu(80, 80, 1.0, end_at=NOW - timedelta(days=10), bh=NOW - timedelta(days=10)),    # cierra en su fecha
+            cu(81, 81, 1.0, end_at=NOW - timedelta(days=100), bh=NOW - timedelta(days=60)),   # cierra ANTES de la fecha de la API
+            cu(82, 82, 1.0, end_at=NOW - timedelta(days=10), bh=NOW - timedelta(days=200)),   # cierra MUCHO DESPUÉS (p. ej. por un freeze)
+            cu(83, 83, 1.0, end_at=NOW - timedelta(days=10)),                                 # sin fecha de la API
+        ])
+        s.commit()
+    o = run(engine, stats.overview, 21, NOW)
+    assert o["cursus_closed"] == 5                                                    # estos cuatro más el terminado del fixture
+    assert (o["cursus_blackholed"], o["cursus_dropped"]) == (1, 1)                   # la etiqueta solo describe la relación con la fecha
+    c = {x["year"]: x for x in run(engine, stats.cohorts, 21, NOW)}["2022"]
+    assert (c["in_cursus"], c["closed"], c["retention"]) == (4, 4, 0.0)

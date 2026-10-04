@@ -17,8 +17,8 @@ function renderOverview(o) {
   $("tiles").innerHTML = tiles([
     [o.avg_level == null ? "–" : nf.format(o.avg_level), "nivel medio"],
     [fmt(o.at_risk), `con fecha de blackhole (API) en menos de ${o.risk_days} días`],
-    [fmt(o.students), "alumnos registrados"],
-    [fmt(o.cursus_blackholed), "blackholeados (histórico)"],
+    [fmt(o.cursus_graduated), "graduados (alumni)"],
+    [fmt(o.cursus_closed), "cerraron el cursus sin graduarse"],
   ]);
 }
 
@@ -41,9 +41,9 @@ function renderSignups(d) {
 
 function renderCohorts(d) {
   $("cohorts").innerHTML = d.length
-    ? table(["Año", "Entraron", "En el cursus", "Siguen abiertos", "Blackholeados", "Baja antes", "Retención", "Nivel medio"],
-        d.map((c) => [esc(c.year), fmt(c.pool), fmt(c.in_cursus), fmt(c.current), fmt(c.blackholed), fmt(c.dropped),
-          `${pct(c.retention)}${meter(c.retention)}`, c.avg_level == null ? "–" : nf.format(c.avg_level)]))
+    ? table(["Año", "Entraron", "En el cursus", "Activos", "Graduados", "Cerraron sin graduarse", "% que cerró", "Nivel medio"],
+        d.map((c) => [esc(c.year), fmt(c.pool), fmt(c.in_cursus), fmt(c.current), fmt(c.graduated), fmt(c.closed),
+          c.in_cursus ? `${pct(c.closed / c.in_cursus)}${meter(c.closed / c.in_cursus)}` : "–", c.avg_level == null ? "–" : nf.format(c.avg_level)]))
     : `<div class="empty">${waiting}</div>`;
 }
 

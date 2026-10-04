@@ -59,23 +59,38 @@ def _last_months(n: int, now: datetime | None = None) -> list[str]:
 
 
 def _members(s: Session, cursus_id: int, now: datetime) -> list[dict]:
-    """Alumnos del cursus; `current` = cursus todavía abierto."""
+    """Alumnos del cursus (solo `kind = student`: no cuentan las de staff ni las externas).
+
+    `current` = cursus abierto y NO graduado (alumni): es el alumno que sigue en el programa. Quien ya es alumni se separa
+    como `graduated`, porque conserva el cursus abierto pero ya no avanza ni corre ningún plazo."""
     rows = s.execute(
-        select(CursusUser.user_id, CursusUser.level, CursusUser.end_at, CursusUser.blackholed_at)
-        .where(CursusUser.cursus_id == cursus_id)
+        select(CursusUser.user_id, CursusUser.level, CursusUser.end_at, CursusUser.blackholed_at, User.alumni)
+        .join(User, User.id == CursusUser.user_id)
+        .where(CursusUser.cursus_id == cursus_id, User.kind == "student")
     ).all()
     out = []
-    for user_id, level, end_at, bh in rows:
+    for user_id, level, end_at, bh, alumni in rows:
         end_at, bh = _aware(end_at), _aware(bh)
-        m = {"user_id": user_id, "level": level, "blackholed_at": bh, "end_at": end_at,
-             "current": end_at is None or end_at > now}
+        m = {"user_id": user_id, "level": level, "blackholed_at": bh, "end_at": end_at, "alumni": bool(alumni),
+             "current": (end_at is None or end_at > now) and not alumni}
         m["outcome"] = _outcome(m)
         out.append(m)
     return out
 
 
+CLOSED = ("blackholed", "dropped", "other")        # cursus cerrado sin graduarse, sea cual sea su relación con la fecha de la API
+
+
 def _outcome(m: dict) -> str:
-    """current | blackholed | dropped (baja antes del blackhole) | other."""
+    """current | graduated | blackholed | dropped | other.
+
+    En 42 NO existe la baja voluntaria: quien se quiere ir deja de venir y acaba blackholeado. Por eso todo cursus cerrado sin
+    graduarse (`CLOSED`) es, en la práctica, un cierre por blackhole. Lo que distingue estas etiquetas es solo la relación entre el
+    cierre y la fecha de blackhole que devuelve la API, que es orientativa (no refleja los plazos por milestone ni los freezes):
+    `blackholed` = cierra entre 1 día antes y 60 después de esa fecha; `dropped` = cierra antes; `other` = cierra mucho después o no
+    hay fecha. `dropped` NO significa baja voluntaria."""
+    if m["alumni"]:
+        return "graduated"
     if m["current"]:
         return "current"
     if m["blackholed_at"] is None or m["end_at"] is None:
@@ -105,6 +120,8 @@ def overview(s: Session, cursus_id: int = 21, now: datetime | None = None) -> di
         "alumni": _count(s, User, User.alumni.is_(True)),
         "cursus_members": len(members),
         "cursus_current": len(current),
+        "cursus_graduated": sum(1 for m in members if m["outcome"] == "graduated"),
+        "cursus_closed": sum(1 for m in members if m["outcome"] in CLOSED),
         "cursus_ended": len(members) - len(current),
         "cursus_blackholed": sum(1 for m in members if m["outcome"] == "blackholed"),
         "cursus_dropped": sum(1 for m in members if m["outcome"] == "dropped"),
@@ -142,7 +159,7 @@ def cohorts(s: Session, cursus_id: int = 21, now: datetime | None = None) -> lis
     now = now or _now()
     members = {m["user_id"]: m for m in _members(s, cursus_id, now)}
     pools: dict[str, dict] = defaultdict(
-        lambda: {"pool": 0, "in_cursus": 0, "current": 0, "blackholed": 0, "dropped": 0, "levels": []})
+        lambda: {"pool": 0, "in_cursus": 0, "current": 0, "graduated": 0, "closed": 0, "blackholed": 0, "dropped": 0, "levels": []})
     for uid, year in s.execute(
         select(User.id, User.pool_year).where(User.kind == "student", User.pool_year.is_not(None))
     ):
@@ -153,6 +170,10 @@ def cohorts(s: Session, cursus_id: int = 21, now: datetime | None = None) -> lis
             c["in_cursus"] += 1
             if m["outcome"] in ("blackholed", "dropped"):
                 c[m["outcome"]] += 1
+            if m["outcome"] in CLOSED:
+                c["closed"] += 1
+            if m["outcome"] == "graduated":
+                c["graduated"] += 1
             if m["current"]:
                 c["current"] += 1
                 if m["level"] is not None:
@@ -161,9 +182,10 @@ def cohorts(s: Session, cursus_id: int = 21, now: datetime | None = None) -> lis
     for year, c in sorted(pools.items(), key=lambda kv: kv[0], reverse=True):
         lv = c["levels"]
         out.append({
-            "year": year, "pool": c["pool"], "in_cursus": c["in_cursus"], "current": c["current"],
-            "blackholed": c["blackholed"], "dropped": c["dropped"],
-            "retention": round(c["current"] / c["in_cursus"], 3) if c["in_cursus"] else None,
+            "year": year, "pool": c["pool"], "in_cursus": c["in_cursus"], "current": c["current"], "graduated": c["graduated"],
+            "closed": c["closed"], "blackholed": c["blackholed"], "dropped": c["dropped"],
+            # retención = la parte de la promoción que NO ha cerrado el cursus sin graduarse (sigue en el programa o se graduó)
+            "retention": round((c["in_cursus"] - c["closed"]) / c["in_cursus"], 3) if c["in_cursus"] else None,
             "avg_level": round(sum(lv) / len(lv), 2) if lv else None,
         })
     return out
@@ -333,8 +355,8 @@ def blackholes(s: Session, cursus_id: int = 21, now: datetime | None = None, wee
     later = stale = 0
     for m in _members(s, cursus_id, now):
         bh = m["blackholed_at"]
-        if m["outcome"] == "blackholed" and bh is not None:
-            history[bh.strftime("%Y-%m")] += 1
+        if m["outcome"] in CLOSED and m["end_at"] is not None:
+            history[m["end_at"].strftime("%Y-%m")] += 1          # por mes de CIERRE: la fecha de la API es orientativa
         if m["current"] and bh is not None and bh < now - timedelta(days=1):
             stale += 1  # cursus abierto con fecha de blackhole ya pasada: no se sabe si es un blackhole real
         if not m["current"] or bh is None or bh < now:
@@ -348,7 +370,7 @@ def blackholes(s: Session, cursus_id: int = 21, now: datetime | None = None, wee
         "weeks": [{"week": (monday + timedelta(weeks=i)).isoformat(), "count": buckets.get(i, 0)} for i in range(weeks)],
         "later": later,
         "upcoming": sum(buckets.values()) + later,
-        # blackholeados por MES DE LA FECHA DE BLACKHOLE (no por año de piscina), últimos 24 meses
+        # cursus cerrados sin graduarse (casi todos, por blackhole) por MES DE CIERRE (no por año de piscina), últimos 24 meses
         "history": [{"month": k, "count": history.get(k, 0)} for k in _last_months(24, now)],
         "history_total": sum(history.values()),
         "stale": stale,
@@ -401,7 +423,8 @@ def milestones(s: Session, cursus_id: int = 21, now: datetime | None = None) -> 
             days = (now - last).total_seconds() / 86400
             stalled[next(lbl for lim, lbl in STALLED_BUCKETS if days < lim)] += 1
 
-    # -- tiempo entre milestones, con todos los alumnos que tienen ambos extremos
+    # -- tiempo entre milestones, con todos los alumnos (no staff) que tienen ambos extremos
+    member_ids = {m["user_id"] for m in members}
     steps = []
     firsts = [(done[m["user_id"]][ranks[0][0]] - _aware(begin[m["user_id"]])).total_seconds() / 86400
               for m in members if m["user_id"] in done and ranks[0][0] in done[m["user_id"]]
@@ -410,7 +433,7 @@ def milestones(s: Session, cursus_id: int = 21, now: datetime | None = None) -> 
     if firsts:
         steps.append({"label": f"Inicio → {labels[ranks[0][0]]}", "median_days": round(statistics.median(firsts), 1), "n": len(firsts)})
     for (a, _, _), (b, _, _) in zip(ranks, ranks[1:]):
-        gaps = [(d[b] - d[a]).total_seconds() / 86400 for d in done.values() if a in d and b in d]
+        gaps = [(d[b] - d[a]).total_seconds() / 86400 for uid, d in done.items() if uid in member_ids and a in d and b in d]
         gaps = [g for g in gaps if g >= 0]
         if gaps:
             steps.append({"label": f"{labels[a]} → {labels[b]}", "median_days": round(statistics.median(gaps), 1), "n": len(gaps)})

@@ -48,12 +48,12 @@ function Overview() {
           : "sincronización en curso: los datos se irán completando"}
       </p>
       <Card raise className="hero">
-        <div><div className="hero-num">{fmt(o?.cursus_current)}</div><div className="sub">alumnos con el 42cursus abierto</div></div>
+        <div><div className="hero-num">{fmt(o?.cursus_current)}</div><div className="sub">alumnos activos en el 42cursus</div></div>
         {o && <Tiles items={[
           [o.avg_level == null ? "–" : fmt1(o.avg_level), "nivel medio"],
           [fmt(o.at_risk), `con fecha de blackhole (API) en menos de ${o.risk_days} días`],
-          [fmt(o.students), "alumnos registrados"],
-          [fmt(o.cursus_blackholed), "blackholeados (histórico)"],
+          [fmt(o.cursus_graduated), "graduados (alumni)"],
+          [fmt(o.cursus_closed), "cerraron el cursus sin graduarse"],
         ]} />}
       </Card>
     </>
@@ -113,12 +113,12 @@ function Blackholes() {
               tip={(x) => <>Semana del {x.label}: <b>{fmt(x.value)}</b> alumnos</>} />
           )}
         </ChartCard>
-        <ChartCard title="Blackholeados por mes" sub="Alumnos cuyo cursus se cerró por blackhole, según el mes de su fecha de blackhole (últimos 24 meses)."
+        <ChartCard title="Cursus cerrados por mes" sub="Alumnos cuyo cursus se cerró sin graduarse, por mes de cierre (últimos 24 meses). En 42 no hay baja voluntaria: quien deja de venir acaba blackholeado, así que casi todos son blackholes aunque la API no indique el motivo."
           note={b.stale ? <p className="sub">No se cuentan {fmt(b.stale)} alumnos con el cursus abierto y una fecha de blackhole ya pasada. Casi todos siguen activos: esa fecha no refleja su deadline real (milestones, freeze), que la API pública no expone.</p> : null}
-          table={b.history_total ? <DataTable head={["Mes", "Blackholeados"]} rows={completeMonths<any>(b.history || []).slice().reverse().map((x) => [monthLabel(x.month), fmt(x.count)])} /> : undefined}>
+          table={b.history_total ? <DataTable head={["Mes", "Cursus cerrados"]} rows={completeMonths<any>(b.history || []).slice().reverse().map((x) => [monthLabel(x.month), fmt(x.count)])} /> : undefined}>
           {!b.history_total ? <Empty>{WAITING}</Empty> : (
-            <Columns label="Blackholeados por mes" data={completeMonths<any>(b.history || []).map((x) => ({ label: monthLabel(x.month), value: x.count }))}
-              tip={(x) => <>{x.label}: <b>{fmt(x.value)}</b> blackholeados</>} />
+            <Columns label="Cursus cerrados por mes" data={completeMonths<any>(b.history || []).map((x) => ({ label: monthLabel(x.month), value: x.count }))}
+              tip={(x) => <>{x.label}: <b>{fmt(x.value)}</b> cursus cerrados</>} />
           )}
         </ChartCard>
       </>
@@ -129,9 +129,9 @@ function Blackholes() {
 function Cohorts() {
   return (
     <Data<any[]> path="/api/cohorts">{(d) => !d.length ? <Empty>{WAITING}</Empty> : (
-      <DataTable head={["Año", "Entraron", "En el cursus", "Siguen abiertos", "Blackholeados", "Baja antes", "Retención", "Nivel medio"]}
-        rows={d.map((c) => [c.year, fmt(c.pool), fmt(c.in_cursus), fmt(c.current), fmt(c.blackholed), fmt(c.dropped),
-          <>{pct(c.retention)}<Meter value={c.retention} /></>, c.avg_level == null ? "–" : fmt1(c.avg_level)])} />
+      <DataTable head={["Año", "Entraron", "En el cursus", "Activos", "Graduados", "Cerraron sin graduarse", "% que cerró", "Nivel medio"]}
+        rows={d.map((c) => [c.year, fmt(c.pool), fmt(c.in_cursus), fmt(c.current), fmt(c.graduated), fmt(c.closed),
+          c.in_cursus ? <>{pct(c.closed / c.in_cursus)}<Meter value={c.closed / c.in_cursus} /></> : "–", c.avg_level == null ? "–" : fmt1(c.avg_level)])} />
     )}</Data>
   );
 }
@@ -367,7 +367,7 @@ export default function Campus() {
             <Card title="Altas por mes" sub="Cuentas de alumno creadas cada mes (entradas a la piscina), sin contar el mes en curso."><Signups /></Card>
           </div>
           <Blackholes />
-          <Card title="Promociones" sub="Agrupado por año de piscina (cuándo entraron), no por fecha de blackhole: los de la piscina más reciente aún no pueden estar blackholeados. «Blackholeados»: cursus cerrado entre 1 día antes y 60 después de su fecha de blackhole. «Baja antes»: cursus cerrado más de 1 día antes de esa fecha.">
+          <Card title="Promociones" sub="Agrupado por año de piscina (cuándo entraron). «Activos»: cursus abierto sin graduarse. «Graduados»: alumni. «Cerraron sin graduarse»: cursus cerrado; en 42 no existe la baja voluntaria (quien se va deja de venir y acaba blackholeado), así que son casi todos blackholes, aunque la fecha de blackhole de la API es orientativa y no refleja los plazos por milestone ni los freezes. Las promociones recientes aún están dentro de plazo.">
             <Cohorts />
           </Card>
         </Section>
