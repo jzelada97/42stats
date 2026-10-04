@@ -8,3 +8,5 @@ data/
 spike/digest.json
 spike/feedbacks.json
 REPORT.md
+.env.*
+!.env.example
