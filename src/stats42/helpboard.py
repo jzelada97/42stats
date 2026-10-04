@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 from . import logins as loginsmod
 from . import points as pointsmod
 from .stats import RANK_RE
-from .db import (AbuseEvent, CursusUser, MentorThanks, Quest, QuestUser, HelpRequest, LearningResource, MentorOffer, MentorProject, Project, ProjectUser)
+from .db import (AbuseEvent, CursusUser, HelpOffer, MentorThanks, Quest, QuestUser, HelpRequest, LearningResource, MentorOffer, MentorProject, Project, ProjectUser)
 from .ratelimit import RateLimiter
 
 KINDS = ("guía", "vídeo", "documentación", "herramienta", "otro")
@@ -138,6 +138,11 @@ class OfferIn(BaseModel):
 class RequestIn(BaseModel):
     project_id: ID
     message: str = Field(max_length=600)
+
+
+class ConfirmIn(BaseModel):
+    ok: bool = True
+    no_code: bool = False
 
 
 class CloseIn(BaseModel):
@@ -291,9 +296,11 @@ def incoming_requests(db: Session, ms: Session, uid: int, cursus_id: int, limit:
     reqs = db.execute(_live_requests(db).where(HelpRequest.project_id.in_(pids), HelpRequest.user_id != uid)
                       .order_by(HelpRequest.created_at.desc()).limit(limit)).scalars().all()
     names = dict(ms.execute(select(Project.id, Project.name).where(Project.id.in_(pids))).all()) if pids else {}
+    mine = {rid for (rid,) in db.execute(select(HelpOffer.request_id).where(HelpOffer.mentor_uid == uid,
+                                                                          HelpOffer.request_id.in_([r.id for r in reqs])))} if reqs else set()
     now = utcnow()
     return [{"id": r.id, "login": r.login, "project_id": r.project_id, "project": names.get(r.project_id, "?"),
-             "message": r.message,
+             "message": r.message, "offered": r.id in mine,
              "days_waiting": (now - aware(r.created_at)).days} for r in reqs]
 
 
@@ -311,12 +318,17 @@ def purge(db: Session) -> None:
                                       LearningResource.created_at < now - RESOURCE_REJECTED_TTL).delete()
     db.query(AbuseEvent).filter(AbuseEvent.last_at < now - ABUSE_TTL).delete()
     loginsmod.purge(db)
-    db.query(MentorThanks).filter(MentorThanks.verified.is_(False), MentorThanks.created_at < now - pointsmod.PENDING_TTL).delete()
+    db.query(MentorThanks).filter(MentorThanks.created_at < now - pointsmod.PENDING_TTL,
+                                  (MentorThanks.verified.is_(False)) | (MentorThanks.confirmed.is_(False))).delete()
+    live = select(HelpRequest.id)
+    db.query(HelpOffer).filter(~HelpOffer.request_id.in_(live)).delete(synchronize_session=False)      # ofertas de peticiones ya cerradas
     db.commit()
 
 
 def erase_user(db: Session, uid: int) -> None:
     """Todo lo que la ayuda guarda de un alumno. Los recursos ya aprobados se quedan, pero sin su nombre."""
+    db.query(HelpOffer).filter(HelpOffer.mentor_uid == uid).delete()
+    db.query(HelpOffer).filter(HelpOffer.request_id.in_(select(HelpRequest.id).where(HelpRequest.user_id == uid))).delete(synchronize_session=False)
     db.query(HelpRequest).filter(HelpRequest.user_id == uid).delete()
     db.query(MentorThanks).filter(MentorThanks.mentor_uid == uid).delete()          # los puntos recibidos se van con el mentor
     db.query(MentorThanks).filter(MentorThanks.asker_uid == uid, MentorThanks.verified.is_(False)).delete()
@@ -388,10 +400,21 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
             by_id = {o["id"]: o for o in options(ms)}
             names = {i: o["name"] for i, o in by_id.items()}
             mine = []
-            for r in db.execute(_live_requests(db, user_id=uid).order_by(HelpRequest.created_at.desc())).scalars():
+            my_requests = db.execute(_live_requests(db, user_id=uid).order_by(HelpRequest.created_at.desc())).scalars().all()
+            offers = pointsmod.open_offers_for(db, [r.id for r in my_requests])
+            responder_ids = {m for ms_ in offers.values() for m in ms_}
+            logins = dict(db.execute(select(MentorOffer.user_id, MentorOffer.login).where(MentorOffer.user_id.in_(responder_ids))).all()) if responder_ids else {}
+            tiers = pointsmod.counts(db, ms, sorted(responder_ids))
+            for r in my_requests:
                 mine.append({"id": r.id, "project_id": r.project_id, "project": names.get(r.project_id, "?"), "message": r.message,
                              "days": (utcnow() - aware(r.created_at)).days,
-                             "mentors": mentors_for(db, ms, r.project_id, uid, cursus_id, limit=5)})
+                             "mentors": mentors_for(db, ms, r.project_id, uid, cursus_id, limit=5),
+                             "responders": [{"login": logins[m], "points": tiers[m]["verified"], "tier": tiers[m]["tier"]}
+                                            for m in offers.get(r.id, []) if m in logins]})
+            confirmations = [{"id": t.id, "project": names.get(t.project_id, "?"), "days": (utcnow() - aware(t.created_at)).days}
+                             for t in db.execute(select(MentorThanks).where(MentorThanks.mentor_uid == uid, MentorThanks.confirmed.is_(False),
+                                                                            MentorThanks.revoked.is_(False))
+                                                 .order_by(MentorThanks.created_at.desc()).limit(30)).scalars()]
             return {
                 "is_admin": is_admin(u),
                 "projects": options(ms),
@@ -403,6 +426,7 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
                 "requests": mine,
                 "incoming": incoming_requests(db, ms, uid, cursus_id),
                 "points": pointsmod.counts(db, ms, [uid])[uid],
+                "confirmations": confirmations,
                 "max_open_requests": MAX_OPEN_REQUESTS,
             }
 
@@ -550,6 +574,7 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
                 if (why := pointsmod.give_thanks(db, ms, r, body.helped_by)) is not None:
                     return bad(why)
                 thanked = body.helped_by
+            db.query(HelpOffer).filter(HelpOffer.request_id == r.id).delete()
             db.delete(r)                    # el texto libre no se conserva: cerrar es borrar
             db.commit()
             if thanked:                     # si ya había validado el proyecto, el punto queda verificado al momento
@@ -557,7 +582,94 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
                 pointsmod.verify_pending(db, ms, [mentor])
             return {"id": request_id, "status": "closed", "thanked": thanked}
 
+    @app.post("/api/help/requests/{request_id}/offer", dependencies=guard)
+    def offer_to_request(request_id: Annotated[int, Path(ge=1, le=MAX_ID)], request: Request):
+        """"Quiero ayudar": el mentor se ofrece a una petición concreta de un proyecto que validó."""
+        u = current_user(request)
+        if u is None:
+            return unauth()
+        if (err := origin_error(request)) is not None:
+            return err
+        if not limits["attempt"].allow(str(u["uid"])):
+            return too_many(u, "ayuda-intentos")
+        with Session(main_engine) as ms, Session(settings_db()) as db:
+            r = db.execute(_live_requests(db).where(HelpRequest.id == request_id)).scalars().first()
+            if r is None or r.user_id == u["uid"]:
+                return bad("No encontrada.", 404)
+            if not limits["offer"].allow(str(u["uid"])):
+                return too_many(u, "ayuda-ofertas")
+            if (why := pointsmod.offer_help(db, ms, r, u["uid"])) is not None:
+                return bad(why)
+            db.commit()
+            return {"id": r.id, "offered": True}
+
+    @app.post("/api/help/requests/{request_id}/withdraw", dependencies=guard)
+    def withdraw_offer(request_id: Annotated[int, Path(ge=1, le=MAX_ID)], request: Request):
+        u = current_user(request)
+        if u is None:
+            return unauth()
+        if (err := origin_error(request)) is not None:
+            return err
+        with Session(settings_db()) as db:
+            db.query(HelpOffer).filter(HelpOffer.request_id == request_id, HelpOffer.mentor_uid == u["uid"]).delete()
+            db.commit()
+            return {"id": request_id, "offered": False}
+
+    @app.post("/api/help/thanks/{thanks_id}/confirm", dependencies=guard)
+    def confirm_thanks(thanks_id: Annotated[int, Path(ge=1, le=MAX_ID)], body: ConfirmIn, request: Request):
+        """El mentor confirma que explicó sin dar código (ok) o niega haber ayudado (no ok: el agradecimiento se borra)."""
+        u = current_user(request)
+        if u is None:
+            return unauth()
+        if (err := origin_error(request)) is not None:
+            return err
+        if body.ok and not body.no_code:
+            return bad("Confirma que explicaste el tema sin dar código.")
+        with Session(settings_db()) as db:
+            if (why := pointsmod.respond(db, u["uid"], thanks_id, body.ok)) is not None:
+                return bad(why, 404)
+            db.commit()
+            return {"id": thanks_id, "confirmed": body.ok}
+
+    @app.get("/api/help/summary", dependencies=guard)
+    def summary(request: Request):
+        """Contadores para la insignia del menú: qué te espera en Ayuda."""
+        u = current_user(request)
+        if u is None:
+            return unauth()
+        with Session(main_engine) as ms, Session(settings_db()) as db:
+            incoming = [r for r in incoming_requests(db, ms, u["uid"], cursus_id) if not r["offered"]]
+            mine = [rid for (rid,) in db.execute(_live_requests(db, user_id=u["uid"]).with_only_columns(HelpRequest.id))]
+            answered = sum(len(v) for v in pointsmod.open_offers_for(db, mine).values())
+            to_confirm = db.scalar(select(func.count()).select_from(MentorThanks).where(
+                MentorThanks.mentor_uid == u["uid"], MentorThanks.confirmed.is_(False), MentorThanks.revoked.is_(False))) or 0
+            return {"incoming": len(incoming), "offers": answered, "to_confirm": to_confirm,
+                    "total": len(incoming) + answered + to_confirm}
+
     # ------------------------------------------------------------ moderación (solo administradores)
+    @app.get("/api/admin/help/points", dependencies=guard)
+    def admin_points(request: Request):
+        u = current_user(request)
+        if u is None or not is_admin(u):
+            return JSONResponse({"detail": "No autorizado."}, status_code=403 if u else 401)
+        with Session(main_engine) as ms, Session(settings_db()) as db:
+            return pointsmod.admin_overview(db, ms, {o["id"]: o["name"] for o in options(ms)})
+
+    @app.post("/api/admin/help/thanks/{thanks_id}/revoke", dependencies=guard)
+    def admin_revoke(thanks_id: Annotated[int, Path(ge=1, le=MAX_ID)], request: Request):
+        u = current_user(request)
+        if u is None or not is_admin(u):
+            return JSONResponse({"detail": "No autorizado."}, status_code=403 if u else 401)
+        if (err := origin_error(request)) is not None:
+            return err
+        if not limits["admin"].allow(str(u["uid"])):
+            return bad("Acción no válida.", 400)
+        with Session(settings_db()) as db:
+            if not pointsmod.revoke(db, thanks_id, u["uid"]):
+                return bad("No encontrado.", 404)
+            db.commit()
+            return {"id": thanks_id, "revoked": True}
+
     @app.get("/api/admin/help/pending", dependencies=guard)
     def pending(request: Request):
         u = current_user(request)

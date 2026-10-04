@@ -239,10 +239,26 @@ class MentorThanks(Base):
     project_id: Mapped[int] = mapped_column(Integer)
     asked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))   # cuándo pidió ayuda: la validación debe ser posterior
     created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    verified: Mapped[bool] = mapped_column(default=False, index=True)
+    verified: Mapped[bool] = mapped_column(default=False, index=True)       # el alumno validó el proyecto dentro de la ventana
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    confirmed: Mapped[bool] = mapped_column(default=False)                  # el mentor confirmó que explicó sin dar código
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked: Mapped[bool] = mapped_column(default=False)                    # anulado por un admin: no cuenta y no se puede repetir
+    revoked_by: Mapped[int | None] = mapped_column(Integer)
 
     __table_args__ = (UniqueConstraint("asker_uid", "project_id", name="uq_thanks_asker_project"),)
+
+
+class HelpOffer(Base):
+    """"Quiero ayudar": un mentor se ofrece a una petición concreta. Solo se puede agradecer a quien se ofreció."""
+
+    __tablename__ = "help_offers"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    request_id: Mapped[int] = mapped_column(Integer, index=True)
+    mentor_uid: Mapped[int] = mapped_column(Integer, index=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (UniqueConstraint("request_id", "mentor_uid", name="uq_offer_request_mentor"),)
 
 
 class LoginRecord(Base):
@@ -269,7 +285,7 @@ class UserSession(Base):
 def user_data_tables():
     return [UserSetting.__table__, LearningResource.__table__, MentorOffer.__table__, MentorProject.__table__,
             HelpRequest.__table__, UserSession.__table__, AbuseEvent.__table__,
-            LoginRecord.__table__, MentorThanks.__table__]
+            LoginRecord.__table__, MentorThanks.__table__, HelpOffer.__table__]
 
 
 class SyncState(Base):
