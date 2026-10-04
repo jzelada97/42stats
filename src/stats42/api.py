@@ -28,6 +28,8 @@ from . import probe as probemod
 from . import stats
 from .client import FortyTwoClient
 from . import logins as loginsmod
+from . import mailer as mailmod
+from .notify import Notifier
 from .db import LoginRecord, User, UserSession, UserSetting, make_engine, make_readonly_engine, user_data_tables
 from .ratelimit import RateLimiter
 
@@ -65,6 +67,8 @@ def create_app(
     require_login: bool | None = None,
     frontend: str | None = None,
     app_dir: Path | None = None,
+    mailer: mailmod.Mailer | None = None,
+    notify_sync: bool = False,
 ) -> FastAPI:
     engine = engine or make_readonly_engine(os.environ.get("FT_DATABASE_URL", "sqlite:///data/stats42.db"))
     cursus_id = cursus_id or int(os.environ.get("FT_CURSUS_ID", "21"))
@@ -90,6 +94,7 @@ def create_app(
     settings_limiter = RateLimiter(20, 60)    # por alumno: guardados de deadline y freeze
     me_limiter = RateLimiter(60, 60)          # por alumno: lecturas de /api/me (consulta mucho más que el resto)
     abuse = AbuseRecorder(lambda: settings_db())
+    notifier = Notifier(lambda: settings_db(), engine, mailer or mailmod.from_env(), cfg.base_url or "", sync=notify_sync)
     used_states: dict[str, float] = {}        # un intento por state: repetir un callback no vuelve a llamar a 42
     key_locks: dict[str, threading.Lock] = {}
 
@@ -268,7 +273,8 @@ def create_app(
             return JSONResponse({"detail": "El login con 42 aún no está configurado."}, status_code=503)
         state = authmod.new_state()           # no llama a 42: no hace falta limitarlo (y un solo alumno agotaría el cupo del campus)
         resp = RedirectResponse(authmod.authorize_url(cfg, state), status_code=302)
-        _cookie(resp, authmod.STATE_COOKIE, authmod.sign(cfg, "state", state), authmod.STATE_TTL)
+        purpose = "notify" if request.query_params.get("purpose") == "notify" and notifier.enabled else None
+        _cookie(resp, authmod.STATE_COOKIE, authmod.sign(cfg, "state", {"s": state, "p": purpose}), authmod.STATE_TTL)
         return resp
 
     def run_admin_probe(token: str, uid: int, login: str) -> None:
@@ -292,7 +298,8 @@ def create_app(
         if error:
             return _fail("denegado")
         raw = request.cookies.get(authmod.STATE_COOKIE)
-        expected = authmod.unsign(cfg, "state", raw, authmod.STATE_TTL)
+        signed = authmod.unsign(cfg, "state", raw, authmod.STATE_TTL)
+        expected, purpose = (signed.get("s"), signed.get("p")) if isinstance(signed, dict) else (signed, None)
         if not code or not state:
             return bad_state(request, "faltan code o state en la URL")
         if not raw:
@@ -327,7 +334,12 @@ def create_app(
         if me["login"] in cfg.admin_logins and cfg.probe_dir:
             # En segundo plano y espaciado: ~20 llamadas seguidas agotaban el límite de 42 y hacían fallar otros logins.
             threading.Thread(target=run_admin_probe, args=(token, me["id"], me["login"]), daemon=True).start()
-        resp = RedirectResponse("/me", status_code=302)
+        dest = "/me"
+        if purpose == "notify":           # el alumno pidió activar los avisos: aquí, y solo aquí, se guarda su correo
+            email = me.get("email")
+            dest = ("/ayuda?avisos=ok#avisos" if notifier.save_email(me["id"], email) else
+                    "/ayuda?avisos=sin-correo#avisos" if notifier.enabled else "/ayuda?avisos=no-disponible#avisos")
+        resp = RedirectResponse(dest, status_code=302)
         resp.delete_cookie(authmod.STATE_COOKIE, path="/")
         name = me.get("usual_first_name") or me.get("first_name") or me["login"]
         sid = open_session(me["id"])
@@ -413,6 +425,24 @@ def create_app(
         return {"deadline": body.deadline.isoformat() if body.deadline else None,
                 "freeze_until": body.freeze_until.isoformat() if body.freeze_until else None}
 
+    @app.get("/api/me/notify")
+    def notify_status(request: Request):
+        u = current_user(request)
+        if u is None:
+            return JSONResponse({"detail": "Inicia sesión con 42."}, status_code=401)
+        pref = notifier.get(u["uid"]) if notifier.enabled else None
+        return {"available": notifier.enabled, "enabled": pref is not None, "email": mailmod.mask_email(pref.email) if pref else None}
+
+    @app.post("/api/me/notify/disable")
+    def notify_disable(request: Request):
+        u = current_user(request)
+        if u is None:
+            return JSONResponse({"detail": "Inicia sesión con 42."}, status_code=401)
+        if (err := origin_error(request)) is not None:
+            return err
+        notifier.disable(u["uid"])
+        return {"available": notifier.enabled, "enabled": False, "email": None}
+
     @app.get("/api/admin/logins")
     def admin_logins(request: Request):
         u = current_user(request)
@@ -440,7 +470,7 @@ def create_app(
         return resp
 
     helpboard.register(app, current_user=current_user, main_engine=engine, settings_db=settings_db,
-                       admin_logins=cfg.admin_logins, origin_error=origin_error, cursus_id=cursus_id, abuse=abuse)
+                       admin_logins=cfg.admin_logins, origin_error=origin_error, cursus_id=cursus_id, abuse=abuse, notifier=notifier)
 
     def page(name: str) -> FileResponse:
         """El mismo index.html para todas las rutas con la interfaz React; un HTML por página con la clásica."""

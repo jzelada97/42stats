@@ -54,6 +54,18 @@ services:
     cpus: "0.5"
     mem_limit: 256m
 
+  # Resumen diario por correo a los mentores (lo programa deploy/stats42-notify.timer). Usa .env.web: ahí van FT_SMTP_* y FT_MAIL_FROM.
+  notify:
+    build: .
+    image: stats42:latest
+    env_file: .env.web
+    volumes:
+      - stats42_data:/data
+    command: ["notify"]
+    restart: "no"
+    cpus: "0.25"
+    mem_limit: 256m
+
 volumes:
   stats42_data:
 

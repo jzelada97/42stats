@@ -47,9 +47,6 @@ export function Header({ sub, links, current, showAuth = true }: { sub: string; 
     <header className="bar">
       <div className="bar-in">
         <a className="brand" href="/">
-          <svg className="mark" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-            <path d="M12 3v18M8 9h8M8 15h8" />
-          </svg>
           42 Madrid<small>/ {sub}</small>
         </a>
         <nav className="nav" aria-label="Secciones">

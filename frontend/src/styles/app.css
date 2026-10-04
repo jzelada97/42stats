@@ -34,23 +34,39 @@
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
+/* Tema oscuro ANTERIOR (musgo más profundo), guardado por si se quiere volver. Para restaurarlo, sustituye estos valores en los dos
+   bloques oscuros de abajo (el de [data-theme="dark"] y el de la media query prefers-color-scheme):
+   --bg: #1b221c;
+   --surface: #232c25;
+   --raised: #2a352c;
+   --border: #34402f;
+   --grid: #2e3a2f;
+   --axis: #4a5a47;
+   --track: #34402f;
+   --accent: #9dbb7a;
+   --accent-ink: #aecb8d;
+   --accent-soft: #2f3d2c;
+   --on-accent: #1b221c;
+   --bamboo: #6f8f6a;
+   (el resto de variables oscuras no cambió) */
+
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #1b221c;
-  --surface: #232c25;
-  --raised: #2a352c;
+  --bg: #252f26;
+  --surface: #2e3a2f;
+  --raised: #37453a;
   --ink: #e6e8dc;
   --ink-2: #cdd3c2;
   --muted: #a3ae98;
-  --border: #34402f;
-  --grid: #2e3a2f;
-  --axis: #4a5a47;
-  --track: #34402f;
-  --accent: #9dbb7a;
-  --accent-ink: #aecb8d;
-  --accent-soft: #2f3d2c;
-  --on-accent: #1b221c;
-  --bamboo: #6f8f6a;
+  --border: #475649;
+  --grid: #3b493d;
+  --axis: #5a6b5c;
+  --track: #425044;
+  --accent: #aacb88;
+  --accent-ink: #bcdb9c;
+  --accent-soft: #3b4c3a;
+  --on-accent: #1f2a21;
+  --bamboo: #7f9f78;
   --hi: #e0996b;
   --warn-ink: #e8ab82;
   --warn-soft: #3b3027;
@@ -63,21 +79,21 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #1b221c;
-    --surface: #232c25;
-    --raised: #2a352c;
+    --bg: #252f26;
+    --surface: #2e3a2f;
+    --raised: #37453a;
     --ink: #e6e8dc;
     --ink-2: #cdd3c2;
     --muted: #a3ae98;
-    --border: #34402f;
-    --grid: #2e3a2f;
-    --axis: #4a5a47;
-    --track: #34402f;
-    --accent: #9dbb7a;
-    --accent-ink: #aecb8d;
-    --accent-soft: #2f3d2c;
-    --on-accent: #1b221c;
-    --bamboo: #6f8f6a;
+    --border: #475649;
+    --grid: #3b493d;
+    --axis: #5a6b5c;
+    --track: #425044;
+    --accent: #aacb88;
+    --accent-ink: #bcdb9c;
+    --accent-soft: #3b4c3a;
+    --on-accent: #1f2a21;
+    --bamboo: #7f9f78;
     --hi: #e0996b;
     --warn-ink: #e8ab82;
     --warn-soft: #3b3027;

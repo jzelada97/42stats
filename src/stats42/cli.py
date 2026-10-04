@@ -142,6 +142,26 @@ def backup(
 
 
 @app.command()
+def notify() -> None:
+    """Resumen diario por correo a los mentores con peticiones sin responder (solo a quien activó los avisos)."""
+    from . import mailer as mailmod
+    from .notify import Notifier
+
+    mailer = mailmod.from_env()
+    if mailer is None:
+        typer.secho("Los avisos por correo no están configurados (FT_SMTP_HOST y FT_MAIL_FROM).", fg="yellow")
+        raise typer.Exit(0)
+    from .db import user_data_tables
+
+    settings = make_engine(os.environ.get("FT_SETTINGS_DATABASE_URL", "sqlite:///data/user_settings.db"))
+    for table in user_data_tables():
+        table.create(settings, checkfirst=True)
+    n = Notifier(lambda: settings, make_engine(os.environ.get("FT_DATABASE_URL", "sqlite:///data/stats42.db")), mailer,
+                 os.environ.get("FT_BASE_URL", ""), sync=True).digest(int(os.environ.get("FT_CURSUS_ID", "21")))
+    typer.echo(f"Resúmenes enviados: {n}")
+
+
+@app.command()
 def serve(
     host: str = typer.Option("0.0.0.0", help="Dirección de escucha."),  # nosec B104: en el contenedor; el puerto no se publica en el host
     port: int = typer.Option(8042, help="Puerto (dentro del contenedor; no se publica en el host)."),

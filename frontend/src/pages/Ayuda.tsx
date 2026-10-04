@@ -316,6 +316,48 @@ function Incoming({ ov, refresh }: { ov: Overview; refresh: () => Promise<void> 
   );
 }
 
+/* ---------------------------------------------------------------- avisos por correo */
+const AVISOS_MSG: Record<string, string> = {
+  ok: "Avisos activados. Te escribiremos a la dirección que 42 nos dio.",
+  "sin-correo": "42 no nos dio una dirección de correo válida, así que no se activaron los avisos.",
+  "no-disponible": "Los avisos por correo no están disponibles ahora mismo.",
+};
+
+function Avisos() {
+  const { data, reload } = useLoad<{ available: boolean; enabled: boolean; email: string | null }>("/api/me/notify");
+  const flash = AVISOS_MSG[new URLSearchParams(location.search).get("avisos") ?? ""];
+  const [msg, setMsg] = useState("");
+  if (!data || !data.available) return null;
+  async function disable() {
+    try {
+      await post("/api/me/notify/disable", {});
+      setMsg("Avisos desactivados y dirección borrada.");
+      await reload();
+      window.dispatchEvent(new Event(HELP_CHANGED));
+    } catch (e) {
+      setMsg((e as Error).message);
+    }
+  }
+  return (
+    <div id="avisos">
+      <Card title="Avisos por correo" sub="Un correo cuando alguien se ofrezca a ayudarte, cuando te agradezcan una ayuda y, si eres mentor, un resumen diario de peticiones sin responder. Nunca llevan texto escrito por otros alumnos.">
+        {data.enabled ? (
+          <div className="row">
+            <span>Activos en <b>{data.email}</b></span>
+            <button type="button" className="btn small ghost" onClick={disable}>Desactivar</button>
+          </div>
+        ) : (
+          <>
+            <p className="sub">Para activarlos pasas por 42 una vez: así leemos tu correo solo con tu permiso. Lo guardamos hasta que los desactives o borres tus datos, y nadie más lo ve.</p>
+            <div className="row"><a className="btn small" href="/auth/login?purpose=notify">Activar avisos</a></div>
+          </>
+        )}
+        {(flash || msg) && <p className="sub" role="status">{msg || flash}</p>}
+      </Card>
+    </div>
+  );
+}
+
 /* ---------------------------------------------------------------- pedir ayuda */
 function MyRequest({ r, refresh, say }: { r: MyRequest; refresh: () => Promise<void>; say: (m: string) => void }) {
   const [who, setWho] = useState("");
@@ -571,6 +613,7 @@ export default function Ayuda() {
         </Section>
 
         <Incoming ov={ov} refresh={refreshAll} />
+        <Avisos />
         <AskForHelp ov={ov} here={here} project={reqProject} setProject={setReqProject} refresh={refreshAll} />
         {ov.is_admin && <Moderation tick={tick} />}
       </main>

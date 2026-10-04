@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 from . import logins as loginsmod
 from . import points as pointsmod
 from .stats import RANK_RE
-from .db import (AbuseEvent, CursusUser, HelpOffer, MentorThanks, Quest, QuestUser, HelpRequest, LearningResource, MentorOffer, MentorProject, Project, ProjectUser)
+from .db import (AbuseEvent, CursusUser, HelpOffer, MailPref, MentorThanks, Quest, QuestUser, HelpRequest, LearningResource, MentorOffer, MentorProject, Project, ProjectUser)
 from .ratelimit import RateLimiter
 
 KINDS = ("guía", "vídeo", "documentación", "herramienta", "otro")
@@ -327,6 +327,7 @@ def purge(db: Session) -> None:
 
 def erase_user(db: Session, uid: int) -> None:
     """Todo lo que la ayuda guarda de un alumno. Los recursos ya aprobados se quedan, pero sin su nombre."""
+    db.query(MailPref).filter(MailPref.user_id == uid).delete()
     db.query(HelpOffer).filter(HelpOffer.mentor_uid == uid).delete()
     db.query(HelpOffer).filter(HelpOffer.request_id.in_(select(HelpRequest.id).where(HelpRequest.user_id == uid))).delete(synchronize_session=False)
     db.query(HelpRequest).filter(HelpRequest.user_id == uid).delete()
@@ -343,7 +344,7 @@ def erase_user(db: Session, uid: int) -> None:
 # ---------------------------------------------------------------- rutas
 
 def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, admin_logins, origin_error, cursus_id: int = 21,
-             abuse=None):
+             abuse=None, notifier=None):
     limits = {"read": RateLimiter(120, 60), "resource": RateLimiter(5, 3600), "offer": RateLimiter(20, 3600), "request": RateLimiter(10, 3600),
               "admin": RateLimiter(240, 60), "attempt": RateLimiter(60, 3600)}
     cache: dict = {}
@@ -580,6 +581,8 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
             if thanked:                     # si ya había validado el proyecto, el punto queda verificado al momento
                 mentor = db.execute(select(MentorOffer.user_id).where(MentorOffer.login == thanked)).scalar()
                 pointsmod.verify_pending(db, ms, [mentor])
+                if notifier is not None:
+                    notifier.thanks_to_confirm(mentor, {o["id"]: o["name"] for o in options(ms)}.get(r.project_id, "un proyecto"))
             return {"id": request_id, "status": "closed", "thanked": thanked}
 
     @app.post("/api/help/requests/{request_id}/offer", dependencies=guard)
@@ -598,9 +601,12 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
                 return bad("No encontrada.", 404)
             if not limits["offer"].allow(str(u["uid"])):
                 return too_many(u, "ayuda-ofertas")
+            fresh = db.scalar(select(HelpOffer.id).where(HelpOffer.request_id == r.id, HelpOffer.mentor_uid == u["uid"])) is None
             if (why := pointsmod.offer_help(db, ms, r, u["uid"])) is not None:
                 return bad(why)
             db.commit()
+            if fresh and notifier is not None:          # solo la primera vez: repetir el botón no manda más correos
+                notifier.offered_help(r.user_id, u["login"], {o["id"]: o["name"] for o in options(ms)}.get(r.project_id, "un proyecto"))
             return {"id": r.id, "offered": True}
 
     @app.post("/api/help/requests/{request_id}/withdraw", dependencies=guard)

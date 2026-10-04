@@ -119,3 +119,27 @@ describe("Ensō", () => {
     }
   });
 });
+
+describe("Avisos por correo", () => {
+  it("no aparece si el servidor no tiene correo configurado", async () => {
+    mockApi({ "/api/me/notify": { available: false, enabled: false, email: null } });
+    const { container } = render(<Ayuda />);
+    await waitFor(() => screen.getAllByText("u13"));
+    expect(container.querySelector("#avisos")).toBeNull();
+  });
+
+  it("ofrece activarlos pasando por 42 y no enseña ninguna dirección", async () => {
+    mockApi({ "/api/me/notify": { available: true, enabled: false, email: null } });
+    const { container } = render(<Ayuda />);
+    const link = await screen.findByRole("link", { name: "Activar avisos" });
+    expect(link).toHaveAttribute("href", "/auth/login?purpose=notify");
+    expect(container.textContent).not.toMatch(/@/);
+  });
+
+  it("si están activos enseña solo la dirección enmascarada y permite desactivarlos", async () => {
+    mockApi({ "/api/me/notify": { available: true, enabled: true, email: "a***@student.42madrid.com" } });
+    render(<Ayuda />);
+    await waitFor(() => screen.getByText("a***@student.42madrid.com"));
+    expect(screen.getByRole("button", { name: "Desactivar" })).toBeInTheDocument();
+  });
+});

@@ -1,0 +1,10 @@
+[Unit]
+Description=Resumen diario de 42stats por correo
+
+[Timer]
+OnCalendar=*-*-* 10:00:00 Europe/Madrid
+RandomizedDelaySec=5min
+Persistent=false
+
+[Install]
+WantedBy=timers.target

@@ -261,6 +261,18 @@ class HelpOffer(Base):
     __table_args__ = (UniqueConstraint("request_id", "mentor_uid", name="uq_offer_request_mentor"),)
 
 
+class MailPref(Base):
+    """Quien ha activado los avisos por correo. Existir = tener los avisos activados; desactivarlos borra la fila (y la dirección)."""
+
+    __tablename__ = "mail_prefs"
+    user_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    email: Mapped[str] = mapped_column(String(254))
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sent_day: Mapped[date | None] = mapped_column(Date)             # tope diario de correos por destinatario
+    sent_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_digest: Mapped[date | None] = mapped_column(Date)
+
+
 class LoginRecord(Base):
     """Quién ha entrado a la web: una fila por alumno (primer y último acceso y cuántos). Sin IP; se purga a los 90 días."""
 
@@ -285,7 +297,7 @@ class UserSession(Base):
 def user_data_tables():
     return [UserSetting.__table__, LearningResource.__table__, MentorOffer.__table__, MentorProject.__table__,
             HelpRequest.__table__, UserSession.__table__, AbuseEvent.__table__,
-            LoginRecord.__table__, MentorThanks.__table__, HelpOffer.__table__]
+            LoginRecord.__table__, MentorThanks.__table__, HelpOffer.__table__, MailPref.__table__]
 
 
 class SyncState(Base):
