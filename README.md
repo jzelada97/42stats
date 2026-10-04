@@ -37,3 +37,15 @@ ejecución solo trae lo modificado desde la última (con 1 día de solape).
 
 No se guardan emails, teléfonos ni nombres. El detalle individual solo debe mostrarse al propio
 alumno (login con 42); del resto del campus, solo agregados.
+
+## Login con 42 y panel personal
+
+`/login` lleva a 42 (OAuth, permiso `public`); 42 devuelve al alumno a `FT_BASE_URL/auth/callback` y la web crea una
+cookie de sesión firmada con su id, login y nombre visible. **No se guarda el token.** `/me` muestra solo los datos de quien ha entrado:
+ritmo, milestones, actividad, comparación con su cursus y consejos por reglas (sin modelo).
+
+Para activarlo hay que añadir `FT_BASE_URL/auth/callback` como *Redirect URI* de la aplicación en
+`profile.intra.42.fr/oauth/applications` y definir `FT_SESSION_SECRET` y `FT_BASE_URL` en `.env`.
+
+Los logins de `FT_ADMIN_LOGINS` ejecutan, al entrar, un sondeo que compara lo que devuelve el token del alumno con el de la
+aplicación (y con la API interna `intrapy`) y lo guarda en `/data/probe-<login>.json`.
