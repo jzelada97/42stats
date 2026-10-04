@@ -68,6 +68,12 @@ tienen también registro en el 42cursus. Los **graduados** (*alumni*) conservan 
 avanzan ni corre ningún plazo para ellos. Una limitación: esos 52 casos podrían ser alumnos reales del cursus cuyo registro no está en los datos; son un
 2 % y no cambian las conclusiones.
 
+**Sobre el número de graduados.** En la base hay 117 cuentas marcadas como *alumni* (todas alumnos); 102 de ellas tienen registro en el 42cursus y son las que se
+cuentan aquí. Es un **mínimo** de quienes han terminado el programa, no un máximo: otros **288** alumnos del cursus han validado los seis Common Core Rank sin estar
+marcados como *alumni* (siguen en la fase final o aún no se les ha «alumnizado»), y se cuentan como activos. En total, **382** alumnos (el 15 % de los que entraron)
+tienen los seis ranks validados. Además, la base solo recoge a quien devuelve el listado del campus 22: si la API dejara de listar a algunos alumni antiguos, faltarían.
+No se ha contrastado con la cifra oficial de graduados del campus.
+
 ### Por promoción (año de la piscina)
 
 | Promoción | Entraron a la piscina | Pasaron al cursus | Activos | Graduados | Cerraron sin graduarse | % que cerró |
