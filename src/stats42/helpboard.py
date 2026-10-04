@@ -25,8 +25,9 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from . import logins as loginsmod
+from . import points as pointsmod
 from .stats import RANK_RE
-from .db import (AbuseEvent, CursusUser, Quest, QuestUser, HelpRequest, LearningResource, MentorOffer, MentorProject, Project, ProjectUser)
+from .db import (AbuseEvent, CursusUser, MentorThanks, Quest, QuestUser, HelpRequest, LearningResource, MentorOffer, MentorProject, Project, ProjectUser)
 from .ratelimit import RateLimiter
 
 KINDS = ("guía", "vídeo", "documentación", "herramienta", "otro")
@@ -139,6 +140,11 @@ class RequestIn(BaseModel):
     message: str = Field(max_length=600)
 
 
+class CloseIn(BaseModel):
+    helped_by: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{2,50}$")      # login del mentor al que se agradece
+    no_code: bool = False                                                                # "me explicó, sin darme código"
+
+
 # ---------------------------------------------------------------- consultas
 
 def project_options(ms: Session, cursus_id: int | None = None) -> list[dict]:
@@ -241,14 +247,14 @@ def mentors_for(db: Session, ms: Session, project_id: int, exclude_uid: int, cur
         .where(ProjectUser.user_id.in_(ids), ProjectUser.project_id == project_id, ProjectUser.validated.is_(True))
         .group_by(ProjectUser.user_id))} if ids else {}
     levels = _levels(ms, ids, cursus_id)
+    points = pointsmod.counts(db, ms, [i for i in ids if i in proof])
     out = []
-    for o in offers:
-        if o.user_id not in proof:            # ya no consta como validado: no se muestra
-            continue
+    for o in sorted((o for o in offers if o.user_id in proof), key=lambda o: -points[o.user_id]["verified"]):   # estable: a igualdad, el más reciente
         mark, at = proof[o.user_id]
         out.append({"login": o.login, "note": o.note, "level": levels.get(o.user_id),
                     "mark": mark if mark is not None and 0 <= mark <= 125 else None,
-                    "validated_on": aware(at).date().isoformat() if at else None})
+                    "validated_on": aware(at).date().isoformat() if at else None,
+                    "points": points[o.user_id]["verified"], "tier": points[o.user_id]["tier"]})
         if len(out) == limit:
             break
     return out
@@ -305,12 +311,16 @@ def purge(db: Session) -> None:
                                       LearningResource.created_at < now - RESOURCE_REJECTED_TTL).delete()
     db.query(AbuseEvent).filter(AbuseEvent.last_at < now - ABUSE_TTL).delete()
     loginsmod.purge(db)
+    db.query(MentorThanks).filter(MentorThanks.verified.is_(False), MentorThanks.created_at < now - pointsmod.PENDING_TTL).delete()
     db.commit()
 
 
 def erase_user(db: Session, uid: int) -> None:
     """Todo lo que la ayuda guarda de un alumno. Los recursos ya aprobados se quedan, pero sin su nombre."""
     db.query(HelpRequest).filter(HelpRequest.user_id == uid).delete()
+    db.query(MentorThanks).filter(MentorThanks.mentor_uid == uid).delete()          # los puntos recibidos se van con el mentor
+    db.query(MentorThanks).filter(MentorThanks.asker_uid == uid, MentorThanks.verified.is_(False)).delete()
+    db.query(MentorThanks).filter(MentorThanks.asker_uid == uid).update({"asker_uid": -MentorThanks.id}, synchronize_session=False)    # lo ya verificado se queda, anónimo
     db.query(AbuseEvent).filter(AbuseEvent.user_id == uid).delete()
     db.query(MentorProject).filter(MentorProject.user_id == uid).delete()
     db.query(MentorOffer).filter(MentorOffer.user_id == uid).delete()
@@ -392,6 +402,7 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
                 "offer": {"active": offer.active, "note": offer.note, "project_ids": sorted(offered)} if offer else None,
                 "requests": mine,
                 "incoming": incoming_requests(db, ms, uid, cursus_id),
+                "points": pointsmod.counts(db, ms, [uid])[uid],
                 "max_open_requests": MAX_OPEN_REQUESTS,
             }
 
@@ -518,19 +529,33 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
             return {"id": r.id, "mentors": mentors_for(db, ms, body.project_id, u["uid"], cursus_id, limit=5)}
 
     @app.post("/api/help/requests/{request_id}/close", dependencies=guard)
-    def close_request(request_id: Annotated[int, Path(ge=1, le=MAX_ID)], request: Request):
+    def close_request(request_id: Annotated[int, Path(ge=1, le=MAX_ID)], body: CloseIn, request: Request):
         u = current_user(request)
         if u is None:
             return unauth()
         if (err := origin_error(request)) is not None:
             return err
-        with Session(settings_db()) as db:
+        with Session(main_engine) as ms, Session(settings_db()) as db:
             r = db.get(HelpRequest, request_id)
             if r is None or (r.user_id != u["uid"] and not is_admin(u)):
                 return bad("No encontrada.", 404)       # no se distingue "no existe" de "no es tuya"
+            thanked = None
+            if body.helped_by:
+                if r.user_id != u["uid"]:
+                    return bad("Solo quien pidió ayuda puede agradecerla.", 403)
+                if not body.no_code:
+                    return bad("Confirma que te explicó sin darte código.")
+                if not limits["attempt"].allow(str(u["uid"])):
+                    return too_many(u, "ayuda-intentos")
+                if (why := pointsmod.give_thanks(db, ms, r, body.helped_by)) is not None:
+                    return bad(why)
+                thanked = body.helped_by
             db.delete(r)                    # el texto libre no se conserva: cerrar es borrar
             db.commit()
-            return {"id": request_id, "status": "closed"}
+            if thanked:                     # si ya había validado el proyecto, el punto queda verificado al momento
+                mentor = db.execute(select(MentorOffer.user_id).where(MentorOffer.login == thanked)).scalar()
+                pointsmod.verify_pending(db, ms, [mentor])
+            return {"id": request_id, "status": "closed", "thanked": thanked}
 
     # ------------------------------------------------------------ moderación (solo administradores)
     @app.get("/api/admin/help/pending", dependencies=guard)

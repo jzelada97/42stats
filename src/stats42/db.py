@@ -6,7 +6,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import JSON, Date, DateTime, Float, Index, Integer, String, create_engine, event
+from sqlalchemy import JSON, Date, DateTime, Float, Index, Integer, String, UniqueConstraint, create_engine, event
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.engine import Engine
@@ -229,6 +229,22 @@ class AbuseEvent(Base):
     last_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
 
+class MentorThanks(Base):
+    """Un alumno agradece la ayuda de un mentor al cerrar su petición. Cuenta como punto cuando se VERIFICA (ver points.py)."""
+
+    __tablename__ = "mentor_thanks"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    asker_uid: Mapped[int] = mapped_column(Integer, index=True)       # negativo (= -id) si quien agradeció borró sus datos
+    mentor_uid: Mapped[int] = mapped_column(Integer, index=True)
+    project_id: Mapped[int] = mapped_column(Integer)
+    asked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))   # cuándo pidió ayuda: la validación debe ser posterior
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    verified: Mapped[bool] = mapped_column(default=False, index=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (UniqueConstraint("asker_uid", "project_id", name="uq_thanks_asker_project"),)
+
+
 class LoginRecord(Base):
     """Quién ha entrado a la web: una fila por alumno (primer y último acceso y cuántos). Sin IP; se purga a los 90 días."""
 
@@ -253,7 +269,7 @@ class UserSession(Base):
 def user_data_tables():
     return [UserSetting.__table__, LearningResource.__table__, MentorOffer.__table__, MentorProject.__table__,
             HelpRequest.__table__, UserSession.__table__, AbuseEvent.__table__,
-            LoginRecord.__table__]
+            LoginRecord.__table__, MentorThanks.__table__]
 
 
 class SyncState(Base):

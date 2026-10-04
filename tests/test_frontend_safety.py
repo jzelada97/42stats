@@ -68,3 +68,9 @@ def test_user_generated_pages_never_use_innerhtml_and_only_assign_validated_link
                 assert any(ok in line for ok in ("safeUrl(", "profileUrl(", 'u)', '"/', "`/")), f"{f.name}:{n}: href sin validar: {line.strip()}"
     helpers = (WEB / "charts.js").read_text(encoding="utf-8")
     assert 'x.protocol !== "https:"' in helpers and "x.username" in helpers and 'host.includes(":")' in helpers   # safeUrl exige https, sin credenciales ni IPs
+
+
+def test_the_hidden_attribute_always_wins_over_display_rules():
+    """Sin esto, `section { display: grid }` mostraba a todos los alumnos las secciones de administración (vacías, pero visibles)."""
+    css = (WEB / "style.css").read_text(encoding="utf-8")
+    assert re.search(r"\[hidden\]\s*\{\s*display:\s*none\s*!important", css)

@@ -65,6 +65,33 @@ async function renderRank() {
   await Promise.all([loadResources(), loadMentors()]);
 }
 
+/* ---------------------------------------------------------------- insignias de mentoría (dibujos, sin texto) */
+const SVGNS = "http://www.w3.org/2000/svg";
+const BADGE_PATHS = {
+  Brote: ["M12 21v-8", "M12 13c0-4 3-6 7-6 0 4-3 6-7 6z", "M12 15c0-3-2-5-6-5 0 3 2 5 6 5z"],
+  "Caña": ["M12 3v18", "M9.5 9h5", "M9.5 15h5", "M12 7c2-1 4-1 6 0", "M12 13c-2-1-4-1-6 0"],
+  Bosque: ["M5 21V9", "M12 21V3", "M19 21V11", "M3.5 14h3 M10.5 9h3 M10.5 15h3 M17.5 16h3"],
+};
+function badge(tier) {
+  if (!BADGE_PATHS[tier]) return "";
+  const s = document.createElementNS(SVGNS, "svg");
+  for (const [k, v] of Object.entries({ viewBox: "0 0 24 24", width: "20", height: "20", class: "tier-badge", "aria-hidden": "true" })) s.setAttribute(k, v);
+  for (const d of BADGE_PATHS[tier]) { const p = document.createElementNS(SVGNS, "path"); p.setAttribute("d", d); s.append(p); }
+  return s;
+}
+const pts = (n) => n + (n === 1 ? " punto" : " puntos");
+
+function renderPoints(p) {
+  const box = document.getElementById("my-points");
+  const any = p && (p.verified || p.pending);
+  box.hidden = !any;
+  if (!any) return;
+  clear(box).append(
+    h("div", { class: "row" }, badge(p.tier), h("b", {}, p.tier || "Aún sin tramo"), h("span", { class: "m" }, pts(p.verified) + (p.verified === 1 ? " verificado" : " verificados"))),
+    p.pending ? h("div", { class: "m" }, p.pending + " pendientes: cuentan cuando quien te agradeció valide el proyecto.") : "",
+    p.next ? h("div", { class: "m" }, "Te faltan " + p.next.needs + " para " + p.next.name + ".") : "");
+}
+
 /* ---------------------------------------------------------------- recursos */
 async function loadResources() {
   const sel = document.getElementById("res-project");
@@ -112,7 +139,8 @@ async function loadMentors() {
   for (const m of d.mentors) {
     const meta = [m.level != null ? `nivel ${m.level}` : null, m.mark != null ? `nota ${m.mark}` : null, m.validated_on ? `validado el ${m.validated_on}` : null].filter(Boolean).join(" · ");
     ul.append(h("li", {},
-      h("a", { href: profileUrl(m.login), external: "1", class: "t mono" }, m.login),
+      h("div", {}, h("a", { href: profileUrl(m.login), external: "1", class: "t mono" }, m.login),
+        m.tier ? h("div", { class: "tier", title: m.tier + " · " + pts(m.points) + (m.points === 1 ? " verificado" : " verificados") }, badge(m.tier), h("span", {}, m.tier)) : ""),
       h("div", {}, h("div", { class: "m" }, meta), m.note ? h("div", { class: "note" }, m.note) : ""),
     ));
   }
@@ -157,13 +185,32 @@ function requestItem(r, { closable }) {
     r.mentors ? h("div", { class: "m" }, r.mentors.length ? "Mentores disponibles: " + r.mentors.map((m) => m.login).join(", ") : "Aún no hay mentores para este proyecto.") : "",
   ));
   if (closable) {
+    const box = h("div", { class: "close-box" });
+    let sel = null, cb = null, ck = null;
+    if (r.mentors && r.mentors.length) {
+      sel = h("select", { "aria-label": "¿Te ayudó alguien?" }, h("option", { value: "" }, "Cerrar sin agradecer"),
+        r.mentors.map((m) => h("option", { value: m.login }, "Gracias a " + m.login)));
+      cb = h("input", { type: "checkbox" });
+      ck = h("label", { class: "check small" }, cb, " Me explicó, sin darme código");
+      ck.hidden = true;
+      sel.addEventListener("change", () => { ck.hidden = !sel.value; });
+      box.append(sel, ck, h("p", { class: "m" }, "El punto del mentor cuenta cuando valides este proyecto."));
+    }
     const b = h("button", { class: "btn small ghost", type: "button" }, "Cerrar");
-    b.addEventListener("click", async () => { try { await api(`/api/help/requests/${Number(r.id)}/close`, {}); await refresh(); } catch (e) { setMsg("req-msg", e.message); } });
-    li.append(b);
+    b.addEventListener("click", async () => {
+      try {
+        const res = await api(`/api/help/requests/${Number(r.id)}/close`, { helped_by: sel && sel.value ? sel.value : null, no_code: !!(cb && cb.checked) });
+        await refresh();
+        if (res.thanked) setMsg("req-msg", "Gracias enviado a " + res.thanked + ". Su punto cuenta cuando valides el proyecto.");
+      } catch (e) { setMsg("req-msg", e.message); }
+    });
+    box.append(b);
+    li.append(box);
   }
   return li;
 }
 function renderRequests(o) {
+  renderPoints(o.points);
   const mine = clear(document.getElementById("my-requests"));
   if (!o.requests.length) mine.append(h("li", { class: "empty" }, "No tienes peticiones abiertas."));
   for (const r of o.requests) mine.append(requestItem(r, { closable: true }));
