@@ -39,6 +39,20 @@
 
     <div class="signals" id="signals"></div>
 
+    <div class="card" id="self-card">
+      <h3>Tu deadline y tu freeze</h3>
+      <p class="sub">42 no los publica en su API, así que indícalos tú y los usamos en el análisis. Solo los ves tú y puedes borrarlos cuando quieras.</p>
+      <form id="self-form" class="self-form" novalidate>
+        <label for="deadline">Deadline de tu milestone<input type="date" id="deadline" name="deadline"></label>
+        <label for="freeze">Freeze hasta<input type="date" id="freeze" name="freeze"></label>
+        <div class="self-actions">
+          <button class="btn small" type="submit">Guardar</button>
+          <button class="btn small ghost" type="button" id="self-clear">Borrar</button>
+          <span class="sub" id="self-msg" role="status"></span>
+        </div>
+      </form>
+    </div>
+
     <div class="card" id="tips-card" hidden>
       <h3>Qué puedes hacer esta semana</h3>
       <ul class="tips" id="tips"></ul>

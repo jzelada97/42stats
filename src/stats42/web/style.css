@@ -210,3 +210,11 @@ footer a { color: var(--ink-2); }
 @media (max-width: 760px) { .status { grid-template-columns: 1fr; } .tl li { grid-template-columns: 70px 90px 1fr; } .auth-link { display: none; } }
 
 .login-teaser { max-width: 560px; width: 100%; display: grid; gap: 12px; margin-top: 8px; }
+
+.self-form { display: flex; flex-wrap: wrap; gap: 14px 20px; align-items: end; margin-top: 10px; }
+.self-form label { display: grid; gap: 4px; font-size: 13px; color: var(--ink-2); }
+.self-form input[type="date"] { font: inherit; font-size: 14px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--page); color: var(--ink); }
+.self-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.btn.small { font-size: 13px; padding: 8px 16px; border-radius: 8px; }
+.btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--axis); }
+.status[data-state="frozen"] .chip { border-color: var(--accent); color: var(--accent-ink); }

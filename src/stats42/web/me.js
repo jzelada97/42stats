@@ -2,7 +2,7 @@
 
 const STATE_ICON = { good: "✓", ok: "•", warn: "!" };
 const STATE_TEXT = { good: "Bien", ok: "Normal", warn: "A vigilar" };
-const STATUS_ICON = { great: "✓", normal: "•", attention: "!", none: "–" };
+const STATUS_ICON = { great: "✓", normal: "•", attention: "!", frozen: "❄", none: "–" };
 
 function renderMe(d) {
   document.getElementById("me-kicker").textContent = `mi panel · ${d.login}`;
@@ -58,14 +58,42 @@ function renderMe(d) {
     ${p.in_progress.length ? `<ul class="list plain">${p.in_progress.map((x) => `<li><span class="t">${esc(x.name)}</span><span class="m">${x.days == null ? "" : `desde hace ${fmt(x.days)} días`}</span></li>`).join("")}</ul>`
       : `<p class="sub">No tienes proyectos en curso.</p>`}`;
 
+  const sr = d.self_reported || {};
+  document.getElementById("deadline").value = sr.deadline || "";
+  document.getElementById("freeze").value = sr.freeze_until || "";
   document.getElementById("bh-note").textContent = d.blackhole_api ? ` Fecha de blackhole según la API: ${d.blackhole_api}.` : "";
 }
 
-fetch("/api/me").then(async (r) => {
-  if (r.status === 401) { location.replace("/login"); return; }
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.detail || r.status);
-  renderMe(d);
-}).catch((e) => {
-  document.getElementById("me-sub").textContent = `No se pudo cargar tu panel (${e.message}). Inténtalo de nuevo en unos minutos.`;
+function loadMe() {
+  return fetch("/api/me").then(async (r) => {
+    if (r.status === 401) { location.replace("/login"); return; }
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.status);
+    renderMe(d);
+  }).catch((e) => {
+    document.getElementById("me-sub").textContent = `No se pudo cargar tu panel (${e.message}). Inténtalo de nuevo en unos minutos.`;
+  });
+}
+
+async function saveSelf(deadline, freeze) {
+  const msg = document.getElementById("self-msg");
+  msg.textContent = "Guardando…";
+  try {
+    const r = await fetch("/api/me/settings", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deadline: deadline || null, freeze_until: freeze || null }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.detail || `error ${r.status}`);
+    await loadMe();
+    msg.textContent = deadline || freeze ? "Guardado." : "Borrado.";
+  } catch (e) {
+    msg.textContent = `No se pudo guardar: ${e.message}`;
+  }
+}
+document.getElementById("self-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  saveSelf(document.getElementById("deadline").value, document.getElementById("freeze").value);
 });
+document.getElementById("self-clear").addEventListener("click", () => saveSelf("", ""));
+loadMe();
