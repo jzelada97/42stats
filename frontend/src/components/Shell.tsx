@@ -1,5 +1,6 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { get, useSession } from "../lib/api";
+import { BRAND } from "../lib/brand";
 import { useTheme, type Mode } from "../lib/theme";
 import { TooltipProvider } from "../lib/tooltip";
 import { Seigaiha } from "./charts/Decor";
@@ -11,6 +12,13 @@ export interface NavLink {
   badge?: boolean;
 }
 
+/** Las páginas de la web: siempre las mismas, en el menú. Cada página solo añade sus propias secciones. */
+export const PAGES: NavLink[] = [
+  { href: "/me", label: "Mi panel" },
+  { href: "/ayuda", label: "Ayuda entre alumnos", badge: true },
+  { href: "/campus", label: "Estadísticas del campus" },
+];
+
 const ICONS: Record<Mode, ReactNode> = {
   auto: <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 4v16" /><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" /></svg>,
   light: <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4" /></svg>,
@@ -18,11 +26,11 @@ const ICONS: Record<Mode, ReactNode> = {
 };
 const LABEL: Record<Mode, string> = { auto: "Auto", light: "Claro", dark: "Oscuro" };
 
-export function ThemeToggle() {
+export function ThemeToggle({ className = "theme-btn" }: { className?: string }) {
   const [mode, cycle] = useTheme();
   return (
-    <button type="button" className="theme-btn" onClick={cycle} aria-label={`Tema: ${LABEL[mode]}. Pulsa para cambiar`} title="Cambiar tema">
-      {ICONS[mode]}<span>{LABEL[mode]}</span>
+    <button type="button" className={className} onClick={cycle} aria-label={`Tema: ${LABEL[mode]}. Pulsa para cambiar`} title="Cambiar tema">
+      {ICONS[mode]}<span>Tema: {LABEL[mode]}</span>
     </button>
   );
 }
@@ -41,27 +49,100 @@ function useHelpBadge(enabled: boolean): number {
   return n;
 }
 
+function Burger({ open }: { open: boolean }) {
+  return (
+    <svg className="burger" data-open={open ? "1" : "0"} viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <line className="l1" x1="4" y1="7" x2="20" y2="7" />
+      <line className="l2" x1="4" y1="12" x2="20" y2="12" />
+      <line className="l3" x1="4" y1="17" x2="20" y2="17" />
+    </svg>
+  );
+}
+
+/** Menú desplegable: se cierra con Escape, al pulsar fuera o al elegir una opción, y devuelve el foco al botón. */
+function Menu({ sections, current, badge, session }: {
+  sections: NavLink[]; current?: string; badge: number; session: { login: string | null; name: string | null };
+}) {
+  const [open, setOpen] = useState(false);
+  const btn = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLElement>(null);
+  const close = useCallback((refocus: boolean) => {
+    setOpen(false);
+    if (refocus) btn.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    panel.current?.querySelector<HTMLElement>("a, button")?.focus();
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") close(true); };
+    const away = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (!panel.current?.contains(t) && !btn.current?.contains(t)) close(false);
+    };
+    document.addEventListener("keydown", key);
+    document.addEventListener("pointerdown", away);
+    return () => { document.removeEventListener("keydown", key); document.removeEventListener("pointerdown", away); };
+  }, [open, close]);
+
+  const here = location.pathname.replace(/\/+$/, "");
+  return (
+    <div className="menu-wrap">
+      <button ref={btn} type="button" className="menu-btn" aria-label="Menú" aria-haspopup="true" aria-expanded={open} aria-controls="site-menu"
+        onClick={() => setOpen((o) => !o)}>
+        <Burger open={open} />
+        {badge > 0 && !open && <span className="dot" aria-label={`${badge} pendientes en Ayuda`} />}
+      </button>
+      {open && (
+        <nav id="site-menu" className="menu" aria-label="Navegación" ref={panel}>
+          <div className="who">Hola, <b>{session.name || session.login}</b></div>
+          <ul className="menu-group">
+            {PAGES.map((l) => (
+              <li key={l.href}>
+                <a href={l.href} aria-current={here === l.href ? "page" : undefined} onClick={() => close(false)}>
+                  {l.label}
+                  {l.badge && badge > 0 && <span className="badge" title="Cosas esperándote en Ayuda">{badge}</span>}
+                </a>
+              </li>
+            ))}
+          </ul>
+          {sections.length > 0 && (
+            <>
+              <div className="menu-title">En esta página</div>
+              <ul className="menu-group">
+                {sections.map((l) => (
+                  <li key={l.href}>
+                    <a href={l.href} aria-current={current === l.href ? "true" : undefined} onClick={() => close(false)}>
+                      {l.label}
+                      {l.badge && badge > 0 && <span className="badge">{badge}</span>}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          <div className="menu-foot">
+            <ThemeToggle className="menu-item" />
+            <a className="menu-item" href="/auth/logout">Salir</a>
+          </div>
+        </nav>
+      )}
+    </div>
+  );
+}
+
 export function Header({ sub, links, current, showAuth = true }: { sub: string; links: NavLink[]; current?: string; showAuth?: boolean }) {
   const session = useSession();
   const badge = useHelpBadge(!!session?.logged_in);
   return (
     <header className="bar">
       <div className="bar-in">
-        <a className="brand" href="/">
-          42 Madrid<small>/ {sub}</small>
-        </a>
-        <nav className="nav" aria-label="Secciones">
-          {links.map((l) => (
-            <a key={l.href} href={l.href} aria-current={current === l.href ? "true" : undefined}>
-              {l.label}
-              {l.badge && badge > 0 && <span className="badge" title="Cosas esperándote en Ayuda">{badge}</span>}
-            </a>
-          ))}
-        </nav>
-        {showAuth && session && (session.logged_in
-          ? <a className="auth-link" href="/me">Mi panel · {session.name || session.login}</a>
-          : <a className="auth-link" href="/login">Entrar con 42</a>)}
-        <ThemeToggle />
+        <a className="brand" href="/">{BRAND}<small>/ {sub}</small></a>
+        {session?.logged_in
+          ? <Menu sections={links} current={current} badge={badge} session={session} />
+          : <div className="bar-actions">
+              {showAuth && session && <a className="auth-link" href="/login">Entrar con 42</a>}
+              <ThemeToggle />
+            </div>}
       </div>
     </header>
   );
@@ -79,7 +160,7 @@ export function Shell({ sub, links, current, children, foot, showAuth = true }: 
   );
 }
 
-/** Resalta en la barra la sección visible mientras se hace scroll. */
+/** Resalta en el menú la sección visible mientras se hace scroll. */
 export function useActiveSection(ids: string[]): string | undefined {
   const [active, setActive] = useState<string>();
   useEffect(() => {

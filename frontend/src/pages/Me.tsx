@@ -7,11 +7,7 @@ import { Card, DataTable, Disclosure, Empty, Section, Tiles } from "../component
 import { post, useLoad } from "../lib/api";
 import { fmt, fmt1, MONTHS, pct } from "../lib/format";
 
-const LINKS: NavLink[] = [
-  { href: "/ayuda", label: "Ayuda", badge: true },
-  { href: "/campus", label: "Estadísticas del campus" },
-  { href: "/auth/logout", label: "Salir" },
-];
+const LINKS: NavLink[] = [];
 const STATE_ICON: Record<string, string> = { good: "✓", ok: "•", warn: "!" };
 const STATE_TEXT: Record<string, string> = { good: "Bien", ok: "Normal", warn: "A vigilar" };
 const STATUS_ICON: Record<string, string> = { great: "✓", normal: "•", attention: "!", frozen: "❄", none: "–" };

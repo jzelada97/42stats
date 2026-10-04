@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import { pageTitle } from "./lib/brand";
 
 const Login = lazy(() => import("./pages/Login"));
 const Me = lazy(() => import("./pages/Me"));
@@ -17,10 +18,10 @@ export function routeFor(pathname: string): Route {
 }
 
 const TITLES: Record<Route, string> = {
-  login: "Entrar con 42 · 42 Madrid",
-  me: "Mi panel · 42 Madrid",
-  ayuda: "Ayuda entre alumnos · 42 Madrid",
-  campus: "Estadísticas del campus · 42 Madrid",
+  login: pageTitle("Entrar con 42"),
+  me: pageTitle("Mi panel"),
+  ayuda: pageTitle("Ayuda entre alumnos"),
+  campus: pageTitle("Estadísticas del campus"),
 };
 
 export default function App() {

@@ -14,7 +14,6 @@ const RES_NAMES: Record<string, string> = {
 };
 
 const LINKS: NavLink[] = [
-  { href: "/ayuda", label: "Ayuda", badge: true },
   { href: "#resumen", label: "Resumen" },
   { href: "#ritmo", label: "Ritmo" },
   { href: "#asistencia", label: "Asistencia" },

@@ -29,8 +29,6 @@ interface Overview {
 }
 
 const LINKS: NavLink[] = [
-  { href: "/me", label: "Mi panel" },
-  { href: "/campus", label: "Campus" },
   { href: "#recursos", label: "Recursos" },
   { href: "#mentoria", label: "Mentoría" },
   { href: "#peticiones", label: "Peticiones", badge: true },
