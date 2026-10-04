@@ -11,11 +11,12 @@ from __future__ import annotations
 import ipaddress
 import re
 import time
+import unicodedata
 from datetime import datetime, timedelta, timezone
-from typing import Literal
+from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -31,8 +32,19 @@ MAX_OPEN_REQUESTS = 3
 MAX_OFFER_PROJECTS = 10
 MIN_ATTEMPTS_FOR_OPTION = 20          # solo proyectos con actividad real aparecen en los desplegables
 
-# control, invisibles y marcas de dirección (U+202E y compañía) que sirven para disfrazar texto
-_UNSAFE = re.compile(r"[\x00-\x1f\x7f​-‏‪-‮⁠-⁩﻿]")
+MAX_ID = 2**31 - 1
+ID = Annotated[int, Field(ge=1, le=MAX_ID)]
+MAX_MARKS = 3                         # marcas combinantes seguidas (acentos): más es "zalgo" que desborda el diseño
+# Letras "en blanco" que se ven como un hueco (relleno hangul, braille vacío, combinador de grafemas...) y no son de categoría C.
+_BLANKS = {0x115F, 0x1160, 0x3164, 0xFFA0, 0x2800, 0x034F, 0x17B4, 0x17B5}
+# Enlaces o referencias a sitios de código: aquí se explican conceptos, no se pasan soluciones.
+_LINKISH = re.compile(r"https?:|www\.|\b[a-z0-9-]+\.(?:com|org|net|io|dev|es|fr|eu|me|app|ly|gg|xyz|tk|sh|co|ai|cc|to)\b"
+                      r"|github|gitlab|pastebin|gist\b|bitbucket", re.I)
+
+
+def _hidden(ch: str) -> bool:
+    """Control, formato (bidi, ancho cero, soft hyphen, tags), uso privado, sin asignar, sustitutos o letras en blanco."""
+    return unicodedata.category(ch)[0] == "C" or ord(ch) in _BLANKS
 
 
 def utcnow() -> datetime:
@@ -45,8 +57,25 @@ def aware(dt: datetime | None) -> datetime | None:
 
 # ---------------------------------------------------------------- validación de texto y enlaces
 
+def _scrub(value: str) -> str:
+    out, marks = [], 0
+    for ch in value:
+        if _hidden(ch):
+            ch = " "
+        if unicodedata.category(ch) in ("Mn", "Me"):
+            marks += 1
+            if marks > MAX_MARKS:
+                continue
+        else:
+            marks = 0
+        out.append(ch)
+    return "".join(out)
+
+
 def clean_text(value: str | None, *, min_len: int, max_len: int, field: str) -> str:
-    text = re.sub(r"\s+", " ", _UNSAFE.sub(" ", value or "")).strip()
+    text = re.sub(r"\s+", " ", _scrub(value or "")).strip()
+    if _LINKISH.search(text):
+        raise ValueError(f"{field}: no incluyas enlaces ni sitios de código; aquí se explican conceptos, no se comparten soluciones.")
     if len(text) < min_len:
         raise ValueError(f"{field}: escribe al menos {min_len} caracteres.")
     if len(text) > max_len:
@@ -57,7 +86,7 @@ def clean_text(value: str | None, *, min_len: int, max_len: int, field: str) -> 
 def validate_url(raw: str | None) -> str:
     """Solo https público: sin credenciales, puertos raros, IPs, hosts internos ni caracteres de control."""
     raw = (raw or "").strip()
-    if not raw or len(raw) > 300 or _UNSAFE.search(raw) or re.search(r"\s", raw):
+    if not raw or len(raw) > 300 or any(_hidden(c) for c in raw) or re.search(r"[\s\\]", raw):
         raise ValueError("El enlace no es válido.")
     try:
         parts = urlsplit(raw)
@@ -73,6 +102,8 @@ def validate_url(raw: str | None) -> str:
     host = (parts.hostname or "").lower().rstrip(".")
     if not host or "." not in host or not host.isascii():
         raise ValueError("El enlace debe apuntar a un dominio público.")
+    if not re.fullmatch(r"[a-z]{2,63}|xn--[a-z0-9-]{1,59}", host.rsplit(".", 1)[1]):   # 127.1, 0x7f.1, 0177.0.0.1: no son dominios
+        raise ValueError("El enlace debe apuntar a un dominio público.")
     try:
         ipaddress.ip_address(host)
     except ValueError:
@@ -87,7 +118,7 @@ def validate_url(raw: str | None) -> str:
 # ---------------------------------------------------------------- cuerpos de petición
 
 class ResourceIn(BaseModel):
-    project_id: int | None = None
+    project_id: ID | None = None
     title: str = Field(max_length=200)
     url: str = Field(max_length=400)
     kind: Literal["guía", "vídeo", "documentación", "herramienta", "otro"]
@@ -97,11 +128,11 @@ class ResourceIn(BaseModel):
 class OfferIn(BaseModel):
     active: bool = True
     note: str = Field(default="", max_length=400)
-    project_ids: list[int] = Field(default_factory=list, max_length=50)
+    project_ids: list[ID] = Field(default_factory=list, max_length=50)
 
 
 class RequestIn(BaseModel):
-    project_id: int
+    project_id: ID
     message: str = Field(max_length=600)
 
 
@@ -186,17 +217,39 @@ def incoming_requests(db: Session, ms: Session, uid: int, cursus_id: int, limit:
     reqs = db.execute(_live_requests(db).where(HelpRequest.project_id.in_(pids), HelpRequest.user_id != uid)
                       .order_by(HelpRequest.created_at.desc()).limit(limit)).scalars().all()
     names = dict(ms.execute(select(Project.id, Project.name).where(Project.id.in_(pids))).all()) if pids else {}
-    levels = _levels(ms, [r.user_id for r in reqs], cursus_id)
     now = utcnow()
     return [{"id": r.id, "login": r.login, "project_id": r.project_id, "project": names.get(r.project_id, "?"),
-             "message": r.message, "level": levels.get(r.user_id),
+             "message": r.message,
              "days_waiting": (now - aware(r.created_at)).days} for r in reqs]
+
+
+# ---------------------------------------------------------------- retención y borrado
+
+RESOURCE_REJECTED_TTL = timedelta(days=30)
+
+
+def purge(db: Session) -> None:
+    """Limitación del plazo de conservación: peticiones caducadas o cerradas y envíos rechazados antiguos no se guardan."""
+    now = utcnow().replace(tzinfo=None)
+    db.query(HelpRequest).filter((HelpRequest.created_at < now - REQUEST_TTL) | (HelpRequest.status != "open")).delete()
+    db.query(LearningResource).filter(LearningResource.status == "rejected",
+                                      LearningResource.created_at < now - RESOURCE_REJECTED_TTL).delete()
+    db.commit()
+
+
+def erase_user(db: Session, uid: int) -> None:
+    """Todo lo que la ayuda guarda de un alumno. Los recursos ya aprobados se quedan, pero sin su nombre."""
+    db.query(HelpRequest).filter(HelpRequest.user_id == uid).delete()
+    db.query(MentorProject).filter(MentorProject.user_id == uid).delete()
+    db.query(MentorOffer).filter(MentorOffer.user_id == uid).delete()
+    db.query(LearningResource).filter(LearningResource.submitted_by == uid, LearningResource.status != "approved").delete()
+    db.query(LearningResource).filter(LearningResource.submitted_by == uid).update({"submitted_by": 0, "submitted_login": ""})
 
 
 # ---------------------------------------------------------------- rutas
 
 def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, admin_logins, origin_error, cursus_id: int = 21):
-    limits = {"resource": RateLimiter(5, 3600), "offer": RateLimiter(20, 3600), "request": RateLimiter(10, 3600),
+    limits = {"read": RateLimiter(120, 60), "resource": RateLimiter(5, 3600), "offer": RateLimiter(20, 3600), "request": RateLimiter(10, 3600),
               "admin": RateLimiter(240, 60), "attempt": RateLimiter(60, 3600)}
     cache: dict = {}
 
@@ -213,8 +266,11 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
 
     def require_user(request: Request) -> None:
         """Dependencia: se resuelve antes de validar el cuerpo, así un visitante recibe 401 y no detalles de validación."""
-        if current_user(request) is None:
+        u = current_user(request)
+        if u is None:
             raise HTTPException(status_code=401, detail="Inicia sesión con 42.")
+        if not limits["read"].allow(str(u["uid"])):
+            raise HTTPException(status_code=429, detail="Demasiadas consultas seguidas. Espera un minuto.", headers={"Retry-After": "60"})
 
     guard = [Depends(require_user)]
 
@@ -234,6 +290,9 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
             return unauth()
         uid = u["uid"]
         with Session(main_engine) as ms, Session(settings_db()) as db:
+            if time.monotonic() - cache.get("purged", -3600.0) >= 3600:
+                cache["purged"] = time.monotonic()
+                purge(db)
             validated = validated_projects(ms, uid)
             offer = db.get(MentorOffer, uid)
             offered = [p for (p,) in db.execute(select(MentorProject.project_id).where(MentorProject.user_id == uid))]
@@ -254,7 +313,7 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
             }
 
     @app.get("/api/help/mentors", dependencies=guard)
-    def mentors(request: Request, project_id: int):
+    def mentors(request: Request, project_id: Annotated[int, Query(ge=1, le=MAX_ID)]):
         u = current_user(request)
         if u is None:
             return unauth()
@@ -262,7 +321,7 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
             return {"project_id": project_id, "mentors": mentors_for(db, ms, project_id, u["uid"], cursus_id)}
 
     @app.get("/api/help/resources", dependencies=guard)
-    def resources(request: Request, project_id: int | None = None):
+    def resources(request: Request, project_id: Annotated[int | None, Query(ge=1, le=MAX_ID)] = None):
         u = current_user(request)
         if u is None:
             return unauth()
@@ -372,7 +431,7 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
             return {"id": r.id, "mentors": mentors_for(db, ms, body.project_id, u["uid"], cursus_id, limit=5)}
 
     @app.post("/api/help/requests/{request_id}/close", dependencies=guard)
-    def close_request(request_id: int, request: Request):
+    def close_request(request_id: Annotated[int, Path(ge=1, le=MAX_ID)], request: Request):
         u = current_user(request)
         if u is None:
             return unauth()
@@ -382,9 +441,9 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
             r = db.get(HelpRequest, request_id)
             if r is None or (r.user_id != u["uid"] and not is_admin(u)):
                 return bad("No encontrada.", 404)       # no se distingue "no existe" de "no es tuya"
-            r.status = "closed"
+            db.delete(r)                    # el texto libre no se conserva: cerrar es borrar
             db.commit()
-            return {"id": r.id, "status": "closed"}
+            return {"id": request_id, "status": "closed"}
 
     # ------------------------------------------------------------ moderación (solo administradores)
     @app.get("/api/admin/help/pending", dependencies=guard)
@@ -400,7 +459,7 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
                                    "project": names.get(r.project_id) if r.project_id else "General"} for r in rows]}
 
     @app.post("/api/admin/help/resources/{resource_id}/{action}", dependencies=guard)
-    def review(resource_id: int, action: str, request: Request):
+    def review(resource_id: Annotated[int, Path(ge=1, le=MAX_ID)], action: str, request: Request):
         u = current_user(request)
         if u is None or not is_admin(u):
             return JSONResponse({"detail": "No autorizado."}, status_code=403 if u else 401)

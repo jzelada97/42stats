@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import secrets
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -17,7 +18,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from . import auth as authmod
@@ -25,7 +26,7 @@ from . import helpboard
 from . import probe as probemod
 from . import stats
 from .client import FortyTwoClient
-from .db import User, UserSetting, make_engine, make_readonly_engine, user_data_tables
+from .db import User, UserSession, UserSetting, make_engine, make_readonly_engine, user_data_tables
 from .ratelimit import RateLimiter
 
 log = logging.getLogger("stats42.auth")
@@ -71,8 +72,14 @@ def create_app(
     app = FastAPI(title="42stats", docs_url=None, redoc_url=None, openapi_url=None)
     cache: dict[str, tuple[float, Any]] = {}
     store: dict[str, Engine] = {}
-    auth_limiter = RateLimiter(30, 60)        # por IP: intentos de login y callbacks
+    # En el campus muchos alumnos salen por la misma IP pública: el límite por IP es solo un tope contra abusos groseros.
+    # El que protege el cupo de 42 (2 peticiones/s para toda la aplicación) es el global, y solo cuenta logins con estado válido.
+    auth_limiter = RateLimiter(300, 60)       # por IP: callbacks
+    exchange_limiter = RateLimiter(40, 60)    # global: canjes de código con 42 (cada uno son 2 llamadas)
     settings_limiter = RateLimiter(20, 60)    # por alumno: guardados de deadline y freeze
+    me_limiter = RateLimiter(60, 60)          # por alumno: lecturas de /api/me (consulta mucho más que el resto)
+    used_states: dict[str, float] = {}        # un intento por state: repetir un callback no vuelve a llamar a 42
+    key_locks: dict[str, threading.Lock] = {}
 
     def client_ip(request: Request) -> str:
         return request.client.host if request.client else "?"
@@ -103,9 +110,13 @@ def create_app(
         hit = cache.get(key)
         if hit and time.monotonic() - hit[0] < TTL[key]:
             return hit[1]
-        value = compute()
-        cache[key] = (time.monotonic(), value)
-        return value
+        with key_locks.setdefault(key, threading.Lock()):     # al caducar, uno recalcula y el resto espera su resultado
+            hit = cache.get(key)
+            if hit and time.monotonic() - hit[0] < TTL[key]:
+                return hit[1]
+            value = compute()
+            cache[key] = (time.monotonic(), value)
+            return value
 
     def session() -> Iterator[Session]:
         with Session(engine) as s:
@@ -196,11 +207,35 @@ def create_app(
 
     # ------------------------------------------------------------ login con 42 y panel personal
     def current_user(request: Request) -> dict | None:
+        """Sesión válida = cookie firmada y reciente CON su fila en la base: salir o caducar la revoca aunque alguien copiara la cookie."""
         data = authmod.unsign(cfg, "session", request.cookies.get(authmod.SESSION_COOKIE), authmod.SESSION_TTL) if cfg.enabled else None
-        return data if isinstance(data, dict) and "uid" in data else None
+        if not (isinstance(data, dict) and "uid" in data and isinstance(data.get("sid"), str)):
+            return None
+        try:
+            with Session(settings_db()) as db:
+                row = db.get(UserSession, data["sid"])
+                alive = row is not None and row.user_id == data["uid"]
+        except SQLAlchemyError:
+            return None                      # ante la duda, sin sesión
+        return data if alive else None
 
-    def _cookie(resp, name: str, value: str, max_age: int) -> None:
+    def _cookie(resp, name: str, value: str, max_age: int | None) -> None:
         resp.set_cookie(name, value, max_age=max_age, httponly=True, samesite="lax", secure=cfg.secure_cookies, path="/")
+
+    def open_session(uid: int) -> str:
+        sid = secrets.token_urlsafe(24)
+        now = datetime.now(timezone.utc)
+        with Session(settings_db()) as db:
+            db.query(UserSession).filter(UserSession.created_at < now - timedelta(seconds=authmod.SESSION_TTL)).delete()
+            db.add(UserSession(sid=sid, user_id=uid, created_at=now))
+            db.commit()
+        return sid
+
+    def close_sessions(*, sid: str | None = None, uid: int | None = None) -> None:
+        with Session(settings_db()) as db:
+            q = db.query(UserSession)
+            q.filter(UserSession.sid == sid).delete() if sid else q.filter(UserSession.user_id == uid).delete()
+            db.commit()
 
     def _fail(code: str) -> RedirectResponse:
         resp = RedirectResponse(f"/login?error={code}", status_code=302)
@@ -217,9 +252,7 @@ def create_app(
     def auth_login(request: Request):
         if not cfg.enabled:
             return JSONResponse({"detail": "El login con 42 aún no está configurado."}, status_code=503)
-        if not auth_limiter.allow(client_ip(request)):
-            return _fail("limite")
-        state = authmod.new_state()
+        state = authmod.new_state()           # no llama a 42: no hace falta limitarlo (y un solo alumno agotaría el cupo del campus)
         resp = RedirectResponse(authmod.authorize_url(cfg, state), status_code=302)
         _cookie(resp, authmod.STATE_COOKIE, authmod.sign(cfg, "state", state), authmod.STATE_TTL)
         return resp
@@ -240,6 +273,14 @@ def create_app(
         expected = authmod.unsign(cfg, "state", request.cookies.get(authmod.STATE_COOKIE), authmod.STATE_TTL)
         if not code or not state or not expected or state != expected:
             return _fail("estado")
+        now = time.monotonic()
+        for k in [k for k, t in used_states.items() if now - t > authmod.STATE_TTL]:
+            used_states.pop(k, None)
+        if state in used_states:
+            return _fail("estado")
+        used_states[state] = now
+        if not exchange_limiter.allow("42"):
+            return _fail("limite")
         try:
             token = authmod.exchange_code(cfg, code, http)
             me = authmod.fetch_me(token, http)
@@ -260,8 +301,10 @@ def create_app(
         resp = RedirectResponse("/me", status_code=302)
         resp.delete_cookie(authmod.STATE_COOKIE, path="/")
         name = me.get("usual_first_name") or me.get("first_name") or me["login"]
-        _cookie(resp, authmod.SESSION_COOKIE, authmod.sign(cfg, "session", {"uid": me["id"], "login": me["login"], "name": name}),
-                authmod.SESSION_TTL)
+        sid = open_session(me["id"])
+        # Sin max_age: cookie de sesión, desaparece al cerrar el navegador. La firma caduca a las 12 h y la fila se revoca al salir.
+        _cookie(resp, authmod.SESSION_COOKIE, authmod.sign(cfg, "session", {"uid": me["id"], "login": me["login"], "name": name, "sid": sid}),
+                None)
         return resp
 
     @app.get("/auth/callback")
@@ -269,7 +312,10 @@ def create_app(
         return finish_login(request, code, state, error)
 
     @app.get("/auth/logout")
-    def auth_logout():
+    def auth_logout(request: Request):
+        u = current_user(request)
+        if u is not None:
+            close_sessions(sid=u["sid"])
         resp = RedirectResponse("/", status_code=302)
         resp.delete_cookie(authmod.SESSION_COOKIE, path="/")
         return resp
@@ -279,6 +325,8 @@ def create_app(
         u = current_user(request)
         if u is None:
             return JSONResponse({"detail": "Inicia sesión con 42 para ver tu panel."}, status_code=401)
+        if not me_limiter.allow(str(u["uid"])):
+            return JSONResponse({"detail": "Demasiadas consultas seguidas. Espera un minuto."}, status_code=429, headers={"Retry-After": "60"})
         ctx = cached("me_ctx", lambda: stats.cohort_context(s, cursus_id))
         with Session(settings_db()) as db:
             row = db.get(UserSetting, u["uid"])
@@ -326,6 +374,23 @@ def create_app(
             db.commit()
         return {"deadline": body.deadline.isoformat() if body.deadline else None,
                 "freeze_until": body.freeze_until.isoformat() if body.freeze_until else None}
+
+    @app.post("/api/me/delete")
+    def delete_my_data(request: Request):
+        """Borra todo lo que esta web guarda de ti (ajustes, mentoría, peticiones, envíos) y cierra tu sesión."""
+        u = current_user(request)
+        if u is None:
+            return JSONResponse({"detail": "Inicia sesión con 42."}, status_code=401)
+        if (err := origin_error(request)) is not None:
+            return err
+        with Session(settings_db()) as db:
+            helpboard.erase_user(db, u["uid"])
+            db.query(UserSetting).filter(UserSetting.user_id == u["uid"]).delete()
+            db.commit()
+        close_sessions(uid=u["uid"])
+        resp = JSONResponse({"deleted": True})
+        resp.delete_cookie(authmod.SESSION_COOKIE, path="/")
+        return resp
 
     helpboard.register(app, current_user=current_user, main_engine=engine, settings_db=settings_db,
                        admin_logins=cfg.admin_logins, origin_error=origin_error, cursus_id=cursus_id)

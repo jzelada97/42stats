@@ -93,7 +93,7 @@ def test_successful_login_creates_session_without_storing_the_token(engine):
     assert seen["token_request"]["redirect_uri"] == "https://42madrid.example/auth/callback"
     raw = c.cookies.get(authmod.SESSION_COOKIE)
     data = URLSafeTimedSerializer(CFG.session_secret, salt="session").loads(raw)
-    assert set(data) == {"uid", "login", "name"} and "tok-user" not in raw and "tok-user" not in json.dumps(data)
+    assert set(data) == {"uid", "login", "name", "sid"} and "tok-user" not in raw and "tok-user" not in json.dumps(data)
     assert c.get("/api/session").json() == {"login_enabled": True, "logged_in": True, "login": "u12", "name": "Ada"}
 
 

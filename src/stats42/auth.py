@@ -26,7 +26,7 @@ RETRY_AFTER_MAX = 5.0
 
 SESSION_COOKIE = "stats42_session"
 STATE_COOKIE = "stats42_state"
-SESSION_TTL = 7 * 24 * 3600
+SESSION_TTL = 12 * 3600       # en ordenadores compartidos: corta, y sin max_age en la cookie (muere con el navegador)
 STATE_TTL = 600
 
 

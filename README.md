@@ -49,6 +49,10 @@ desarrollo local. Las páginas llevan `noindex` y `robots.txt` lo prohíbe todo.
 cookie de sesión firmada con su id, login y nombre visible. **No se guarda el token.** `/me` muestra solo los datos de quien ha entrado:
 ritmo, milestones, actividad, comparación con su cursus y consejos por reglas (sin modelo).
 
+La sesión dura 12 h como máximo, la cookie muere al cerrar el navegador y cada sesión tiene su fila en `user_sessions`: salir
+(o borrar tus datos desde `/me`) la revoca aunque alguien hubiera copiado la cookie. El texto libre de la ayuda no admite
+enlaces, las peticiones se borran al cerrarlas o a los 30 días y los envíos rechazados a los 30 días.
+
 La web y la sincronización usan **aplicaciones de 42 distintas**: `.env` (sincronización) y `.env.web` (web, con su
 propio `FT_UID`/`FT_SECRET`). Así tienen límite de ritmo propio (42 permite 2 peticiones por segundo por aplicación) y
 un secreto filtrado de la web no da acceso a la sincronización.

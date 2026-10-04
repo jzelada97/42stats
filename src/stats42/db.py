@@ -217,10 +217,19 @@ class HelpRequest(Base):
     created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class UserSession(Base):
+    """Sesión abierta con 42. La cookie solo lleva el id: si la fila desaparece (salir, caducar), la cookie deja de valer."""
+
+    __tablename__ = "user_sessions"
+    sid: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 # Tablas de la base escribible de la web (la del campus es de solo lectura para ella).
 def user_data_tables():
     return [UserSetting.__table__, LearningResource.__table__, MentorOffer.__table__, MentorProject.__table__,
-            HelpRequest.__table__]
+            HelpRequest.__table__, UserSession.__table__]
 
 
 class SyncState(Base):

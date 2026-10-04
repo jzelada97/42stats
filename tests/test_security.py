@@ -65,11 +65,17 @@ def test_settings_writes_are_rate_limited_per_user(engine, monkeypatch):
     assert c.post("/api/me/settings", json={"deadline": "2026-12-01"}, headers={"Origin": "https://42madrid.example"}).status_code == 200
 
 
-def test_login_attempts_are_rate_limited_per_ip(engine):
+def test_one_student_cannot_lock_the_campus_out_of_the_login_page(engine):
+    """El campus sale por una sola IP: /auth/login no llama a 42, así que no se limita y nadie puede agotarlo para los demás."""
     c, _ = make_client(engine)
-    results = [c.get("/auth/login").headers["location"] for _ in range(32)]
-    assert results[0].startswith("https://api.intra.42.fr/oauth/authorize")
-    assert results[-1] == "/login?error=limite"
+    assert all(c.get("/auth/login").headers["location"].startswith("https://api.intra.42.fr/oauth/authorize") for _ in range(100))
+    assert login(c).headers["location"] == "/me"
+
+
+def test_exchanges_with_42_are_capped_globally_to_protect_the_app_quota(engine):
+    c, _ = make_client(engine)
+    results = [login(c).headers["location"] for _ in range(42)]
+    assert results[0] == "/me" and results[-1] == "/login?error=limite"
 
 
 def test_rate_limiter_window_and_memory_are_bounded(monkeypatch):

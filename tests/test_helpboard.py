@@ -182,10 +182,12 @@ def test_help_request_lifecycle_and_matching(engine, store):
     assert r.status_code == 200 and [m["login"] for m in r.json()["mentors"]] == ["u13"]
     mine = asker.get("/api/help/overview").json()["requests"]
     assert len(mine) == 1 and mine[0]["project"] == "libft" and [m["login"] for m in mine[0]["mentors"]] == ["u13"]
-    inbox = user(engine, store, 13).get("/api/help/overview").json()["incoming"]       # el mentor la ve, con login pero sin id
-    assert [(i["login"], i["project"], i["level"]) for i in inbox] == [("u15", "libft", 1.0)] and "user_id" not in str(inbox)
+    inbox = user(engine, store, 13).get("/api/help/overview").json()["incoming"]       # el mentor la ve, con login pero sin id ni nivel
+    assert [(i["login"], i["project"]) for i in inbox] == [("u15", "libft")] and "user_id" not in str(inbox) and "level" not in inbox[0]
     assert post(asker, f"/api/help/requests/{r.json()['id']}/close").status_code == 200
     assert asker.get("/api/help/overview").json()["requests"] == []
+    with Session(store) as db:                                                         # cerrar borra el texto, no lo archiva
+        assert db.query(HelpRequest).count() == 0
     assert user(engine, store, 13).get("/api/help/overview").json()["incoming"] == []
 
 
