@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { get, useSession } from "../lib/api";
 import { useTheme, type Mode } from "../lib/theme";
 import { TooltipProvider } from "../lib/tooltip";
+import { Seigaiha } from "./charts/Decor";
 
 export interface NavLink {
   href: string;
@@ -69,6 +70,8 @@ export function Header({ sub, links, current, showAuth = true }: { sub: string; 
 export function Shell({ sub, links, current, children, foot, showAuth = true }: { sub: string; links: NavLink[]; current?: string; children: ReactNode; foot?: ReactNode; showAuth?: boolean }) {
   return (
     <TooltipProvider>
+      <div className="side-decor left" aria-hidden="true"><Seigaiha /></div>
+      <div className="side-decor right" aria-hidden="true"><Seigaiha /></div>
       <Header sub={sub} links={links} current={current} showAuth={showAuth} />
       {children}
       {foot && <footer className="foot">{foot}</footer>}
