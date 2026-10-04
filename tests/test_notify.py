@@ -321,6 +321,8 @@ def test_mailtest_sends_one_message_to_the_given_address(monkeypatch):
     r = CliRunner().invoke(cli_app, ["mailtest", "--to", "ana@student.42madrid.com"])
     assert r.exit_code == 0 and "Enviado a ana@student.42madrid.com" in r.output
     assert [(to, subj) for to, subj, _ in mailer.sent] == [("ana@student.42madrid.com", "Prueba de 42stats")]
+    body = mailer.sent[0][2]                                                       # lleva enlaces como los reales, para ver si el servicio los reescribe
+    assert "https://profile.intra.42.fr/users/ejemplo" in body and "/ayuda#peticiones" in body
 
 
 def test_mailtest_rejects_bad_addresses_and_missing_configuration(monkeypatch):

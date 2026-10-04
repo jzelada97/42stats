@@ -176,7 +176,12 @@ def mailtest(to: str = typer.Option(..., "--to", help="Dirección a la que envia
         typer.secho("Faltan FT_SMTP_HOST y FT_MAIL_FROM (mira .env.example).", fg="red")
         raise typer.Exit(1)
     try:
-        mailer.send(to, "Prueba de 42stats", "Si lees esto, el envío por SMTP funciona.\n\nPuedes ignorar este mensaje.")
+        base = os.environ.get("FT_BASE_URL", "https://42madrid.zelada.es").rstrip("/")
+        mailer.send(to, "Prueba de 42stats", (
+            "Si lees esto, el envío por SMTP funciona.\n\n"
+            "Estos dos enlaces son como los de los avisos reales. Comprueba que NO han cambiado a otro dominio (pasa el ratón por encima o "
+            "mira el original del mensaje): si los ves reescritos por el servicio de correo, hay que desactivar el seguimiento de clics.\n\n"
+            f"Perfil de un mentor: https://profile.intra.42.fr/users/ejemplo\nLa web: {base}/ayuda#peticiones\n\nPuedes ignorar este mensaje."))
     except smtplib.SMTPAuthenticationError:
         typer.secho("El servidor rechazó el usuario o la clave. En Brevo la contraseña es la «SMTP key» (Settings > SMTP & API), "
                     "no la contraseña de la cuenta ni una API key.", fg="red")
