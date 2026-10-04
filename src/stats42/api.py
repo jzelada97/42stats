@@ -1,6 +1,7 @@
 """API pública (solo agregados) y servidor de la web."""
 from __future__ import annotations
 
+import logging
 import os
 import time
 from collections.abc import Callable, Iterator
@@ -21,6 +22,7 @@ from . import stats
 from .client import FortyTwoClient
 from .db import User, make_readonly_engine
 
+log = logging.getLogger("stats42.auth")
 WEB_DIR = Path(__file__).parent / "web"
 PRIVATE_PATHS = {"/api/me", "/api/session", "/me", "/login"}
 CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:"
@@ -163,7 +165,12 @@ def create_app(
         try:
             token = authmod.exchange_code(cfg, code, http)
             me = authmod.fetch_me(token, http)
-        except (httpx.HTTPError, KeyError, ValueError):
+        except httpx.HTTPStatusError as e:
+            # El cuerpo de error de 42 no lleva secretos (p. ej. invalid_grant); el código y el token nunca se registran.
+            log.warning("login: 42 respondió %s en %s: %s", e.response.status_code, e.request.url.path, e.response.text[:300])
+            return _fail("intercambio")
+        except (httpx.HTTPError, KeyError, ValueError) as e:
+            log.warning("login: fallo al hablar con 42 (%s): %s", type(e).__name__, e)
             return _fail("intercambio")
         with Session(engine) as db:
             known = db.get(User, me["id"]) is not None

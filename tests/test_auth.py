@@ -237,3 +237,13 @@ def test_root_without_oauth_params_still_serves_the_dashboard_and_ignores_forged
     assert c.get("/").status_code == 200
     r = c.get("/", params={"code": "CODE", "state": "forjado"})          # sin cookie de state: se rechaza
     assert r.status_code == 302 and r.headers["location"] == "/login?error=estado"
+
+
+def test_failed_exchange_logs_42s_reason_but_never_the_code_or_secret(engine, caplog):
+    c, _ = make_client(engine, token_status=400)
+    with caplog.at_level("WARNING", logger="stats42.auth"):
+        r = login(c)
+    assert r.headers["location"] == "/login?error=intercambio"
+    text = " ".join(rec.getMessage() for rec in caplog.records)
+    assert "400" in text and "invalid_grant" in text
+    assert "CODE" not in text and CFG.secret not in text and "tok-user" not in text
