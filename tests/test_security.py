@@ -150,7 +150,21 @@ def test_search_engines_are_told_to_stay_away(engine):
     assert c.get("/login").headers["x-robots-tag"] == "noindex, nofollow"
 
 
-def test_stats_responses_are_private_to_the_browser_cache(engine):
+def test_stats_responses_are_never_stored_by_the_browser(engine):
     c, _ = make_client(engine)
     login(c)
-    assert c.get("/api/overview").headers["cache-control"] == "private, max-age=300"
+    assert c.get("/api/overview").headers["cache-control"] == "no-store"
+
+
+@pytest.mark.parametrize("path", ["/api/me", "/api/help/overview", "/api/help/mentors?project_id=1", "/api/help/resources",
+                                  "/api/session", "/api/overview", "/api/attendance", "/api/habits"])
+def test_nothing_under_api_is_cached_by_the_browser(engine, path):
+    """Regresión: /api/help/overview llevaba max-age=300 y en un ordenador compartido el siguiente alumno veía lo del anterior."""
+    c, _ = make_client(engine)
+    login(c)
+    assert c.get(path).headers["cache-control"] == "no-store"
+
+
+def test_only_the_health_check_may_be_cached(engine):
+    c, _ = make_client(engine)
+    assert "no-store" not in c.get("/api/health").headers.get("cache-control", "")

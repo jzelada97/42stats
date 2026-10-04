@@ -196,7 +196,7 @@ def test_api_endpoints_and_headers(engine):
                  "attendance", "evaluations", "events"):
         assert c.get(f"/api/{path}").status_code == 200, path
     r = c.get("/api/overview")
-    assert r.headers["cache-control"] == "private, max-age=300"
+    assert r.headers["cache-control"] == "no-store"
     assert r.headers["x-content-type-options"] == "nosniff"
     assert "script-src 'self'" in r.headers["content-security-policy"]
     assert "max-age" not in c.get("/api/health").headers.get("cache-control", "")

@@ -30,7 +30,7 @@ from .ratelimit import RateLimiter
 
 log = logging.getLogger("stats42.auth")
 WEB_DIR = Path(__file__).parent / "web"
-PRIVATE_PATHS = {"/", "/api/me", "/api/session", "/me", "/login", "/campus"}
+PRIVATE_PATHS = {"/", "/api/me", "/api/session", "/me", "/login", "/campus", "/ayuda"}
 # Sin scripts inline ni conexiones a otros sitios; nadie puede enmarcar la web (clickjacking) ni cambiar <base>.
 CSP = ("default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; "
        "frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'")
@@ -133,10 +133,10 @@ def create_app(
         resp.headers["Referrer-Policy"] = "no-referrer"
         resp.headers["Content-Security-Policy"] = CSP
         path = request.url.path
-        if path in PRIVATE_PATHS or path.startswith("/auth/"):
-            resp.headers["Cache-Control"] = "no-store"   # respuestas ligadas a una sesión: nunca se cachean
-        elif path.startswith("/api/") and path != "/api/health":
-            resp.headers.setdefault("Cache-Control", "private, max-age=300")
+        if path in PRIVATE_PATHS or path.startswith(("/auth/", "/api/")) and path != "/api/health":
+            # Todo lo de /api/ depende de la sesión (y en el campus los ordenadores se comparten): el navegador no guarda
+            # nada. El rendimiento lo da la caché del servidor, no la del navegador.
+            resp.headers["Cache-Control"] = "no-store"
         elif path.startswith("/static/"):
             resp.headers.setdefault("Cache-Control", "public, max-age=300")
         return resp
@@ -348,6 +348,12 @@ def create_app(
         if current_user(request) is not None:
             return RedirectResponse("/me", status_code=302)
         return FileResponse(WEB_DIR / "login.html", media_type="text/html; charset=utf-8")
+
+    @app.get("/ayuda")
+    def ayuda_page(request: Request):
+        if current_user(request) is None:
+            return RedirectResponse("/login", status_code=302)
+        return FileResponse(WEB_DIR / "ayuda.html", media_type="text/html; charset=utf-8")
 
     @app.get("/campus")
     def campus_page(request: Request):
