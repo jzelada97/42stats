@@ -31,6 +31,7 @@ class AuthConfig:
     base_url: str = ""            # p. ej. https://42madrid.zelada.es (sin barra final)
     admin_logins: frozenset = frozenset()
     probe_dir: str | None = None  # si existe, el sondeo de un admin escribe aquí su resultado
+    redirect_override: str = ""   # dirección de retorno registrada en 42, si no es BASE_URL/auth/callback
 
     @classmethod
     def from_env(cls) -> "AuthConfig":
@@ -42,6 +43,7 @@ class AuthConfig:
             base_url=env("FT_BASE_URL", "").rstrip("/"),
             admin_logins=frozenset(x.strip() for x in env("FT_ADMIN_LOGINS", "").split(",") if x.strip()),
             probe_dir=env("FT_PROBE_DIR") or None,
+            redirect_override=env("FT_REDIRECT_URI", "").strip(),
         )
 
     @property
@@ -50,7 +52,8 @@ class AuthConfig:
 
     @property
     def redirect_uri(self) -> str:
-        return f"{self.base_url}/auth/callback"
+        """Debe coincidir EXACTAMENTE con la registrada en la aplicación de 42."""
+        return self.redirect_override or f"{self.base_url}/auth/callback"
 
     @property
     def secure_cookies(self) -> bool:

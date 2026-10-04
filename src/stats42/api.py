@@ -152,8 +152,7 @@ def create_app(
         _cookie(resp, authmod.STATE_COOKIE, authmod.sign(cfg, "state", state), authmod.STATE_TTL)
         return resp
 
-    @app.get("/auth/callback")
-    def auth_callback(request: Request, code: str | None = None, state: str | None = None, error: str | None = None):
+    def finish_login(request: Request, code: str | None, state: str | None, error: str | None):
         if not cfg.enabled:
             return JSONResponse({"detail": "El login con 42 aún no está configurado."}, status_code=503)
         if error:
@@ -183,6 +182,10 @@ def create_app(
                 authmod.SESSION_TTL)
         return resp
 
+    @app.get("/auth/callback")
+    def auth_callback(request: Request, code: str | None = None, state: str | None = None, error: str | None = None):
+        return finish_login(request, code, state, error)
+
     @app.get("/auth/logout")
     def auth_logout():
         resp = RedirectResponse("/", status_code=302)
@@ -211,7 +214,10 @@ def create_app(
         return FileResponse(WEB_DIR / "me.html", media_type="text/html; charset=utf-8")
 
     @app.get("/")
-    def index() -> FileResponse:
+    def index(request: Request, code: str | None = None, state: str | None = None, error: str | None = None):
+        # Si en 42 solo se pudo registrar el dominio como dirección de retorno, el login termina aquí.
+        if state and (code or error):
+            return finish_login(request, code, state, error)
         return FileResponse(WEB_DIR / "index.html", media_type="text/html; charset=utf-8")
 
     app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
