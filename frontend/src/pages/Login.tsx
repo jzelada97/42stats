@@ -20,7 +20,7 @@ export default function Login() {
   const disabled = session !== null && !session.login_enabled;
   if (session?.logged_in && !error) location.replace("/me");
   return (
-    <Shell sub="campus 22" links={[]}>
+    <Shell sub="campus 22" links={[]} showAuth={false}>
       <main className="login-wrap">
         <section className="card raise login-card" aria-labelledby="h-login">
           <Seigaiha />

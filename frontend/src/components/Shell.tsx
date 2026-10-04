@@ -40,7 +40,7 @@ function useHelpBadge(enabled: boolean): number {
   return n;
 }
 
-export function Header({ sub, links, current }: { sub: string; links: NavLink[]; current?: string }) {
+export function Header({ sub, links, current, showAuth = true }: { sub: string; links: NavLink[]; current?: string; showAuth?: boolean }) {
   const session = useSession();
   const badge = useHelpBadge(!!session?.logged_in);
   return (
@@ -60,7 +60,7 @@ export function Header({ sub, links, current }: { sub: string; links: NavLink[];
             </a>
           ))}
         </nav>
-        {session && (session.logged_in
+        {showAuth && session && (session.logged_in
           ? <a className="auth-link" href="/me">Mi panel · {session.name || session.login}</a>
           : <a className="auth-link" href="/login">Entrar con 42</a>)}
         <ThemeToggle />
@@ -69,10 +69,10 @@ export function Header({ sub, links, current }: { sub: string; links: NavLink[];
   );
 }
 
-export function Shell({ sub, links, current, children, foot }: { sub: string; links: NavLink[]; current?: string; children: ReactNode; foot?: ReactNode }) {
+export function Shell({ sub, links, current, children, foot, showAuth = true }: { sub: string; links: NavLink[]; current?: string; children: ReactNode; foot?: ReactNode; showAuth?: boolean }) {
   return (
     <TooltipProvider>
-      <Header sub={sub} links={links} current={current} />
+      <Header sub={sub} links={links} current={current} showAuth={showAuth} />
       {children}
       {foot && <footer className="foot">{foot}</footer>}
     </TooltipProvider>
