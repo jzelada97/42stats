@@ -49,6 +49,10 @@ desarrollo local. Las páginas llevan `noindex` y `robots.txt` lo prohíbe todo.
 cookie de sesión firmada con su id, login y nombre visible. **No se guarda el token.** `/me` muestra solo los datos de quien ha entrado:
 ritmo, milestones, actividad, comparación con su cursus y consejos por reglas (sin modelo).
 
+La web y la sincronización usan **aplicaciones de 42 distintas**: `.env` (sincronización) y `.env.web` (web, con su
+propio `FT_UID`/`FT_SECRET`). Así tienen límite de ritmo propio (42 permite 2 peticiones por segundo por aplicación) y
+un secreto filtrado de la web no da acceso a la sincronización.
+
 Para activarlo hay que añadir `FT_BASE_URL/auth/callback` como *Redirect URI* de la aplicación en
 `profile.intra.42.fr/oauth/applications` y definir `FT_SESSION_SECRET` y `FT_BASE_URL` en `.env`.
 

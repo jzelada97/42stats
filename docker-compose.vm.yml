@@ -12,7 +12,9 @@ services:
     image: stats42:latest
     container_name: stats42-api       # nombre único en la VM (lo usa Caddy)
     command: ["serve", "--port", "8042"]
-    env_file: .env                    # FT_UID/FT_SECRET (OAuth), FT_SESSION_SECRET, FT_BASE_URL, FT_ADMIN_LOGINS
+    # La web usa SU PROPIA aplicación de 42 (solo login): límite de ritmo propio y, si se filtra su secreto, la
+    # clave de la sincronización queda a salvo. Contiene FT_UID/FT_SECRET, FT_SESSION_SECRET, FT_BASE_URL, FT_ADMIN_LOGINS.
+    env_file: .env.web
     volumes:
       - stats42_data:/data
     networks:
@@ -30,7 +32,7 @@ services:
   sync:
     build: .
     image: stats42:latest
-    env_file: .env
+    env_file: .env                    # aplicación de 42 de la sincronización (FT_UID/FT_SECRET)
     volumes:
       - stats42_data:/data
     command: ["sync", "-v"]
