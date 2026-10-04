@@ -339,3 +339,33 @@ def test_mailtest_explains_a_wrong_smtp_key_without_printing_secrets(monkeypatch
     monkeypatch.setenv("FT_SMTP_PASSWORD", "clave-super-secreta")
     r = CliRunner().invoke(cli_app, ["mailtest", "--to", "ana@x.es"])
     assert r.exit_code == 1 and "SMTP key" in r.output and "clave-super-secreta" not in r.output
+
+
+def test_reply_to_is_set_only_when_configured_and_valid(monkeypatch):
+    sent = []
+
+    class FakeSMTP:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def starttls(self):
+            pass
+
+        def login(self, *a):
+            pass
+
+        def send_message(self, msg):
+            sent.append(msg["Reply-To"])
+    monkeypatch.setattr(smtplib, "SMTP", FakeSMTP)
+    SmtpMailer(SmtpConfig("h", 587, "u", "p", "42stats <avisos@zelada.es>", "jose@zelada.es")).send("ana@x.es", "s", "b")
+    SmtpMailer(SmtpConfig("h", 587, "u", "p", "42stats <avisos@zelada.es>")).send("ana@x.es", "s", "b")
+    SmtpMailer(SmtpConfig("h", 587, "u", "p", "42stats <avisos@zelada.es>", "mal\nBcc: x@y.com")).send("ana@x.es", "s", "b")
+    assert sent == ["jose@zelada.es", None, None]
+    monkeypatch.setenv("FT_MAIL_REPLY_TO", "jose@zelada.es")
+    assert SmtpConfig.from_env().reply_to == "jose@zelada.es"

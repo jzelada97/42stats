@@ -37,6 +37,7 @@ class SmtpConfig:
     user: str = ""
     password: str = ""
     sender: str = ""          # p. ej. "42stats <avisos@zelada.es>"
+    reply_to: str = ""        # opcional: adonde llegan las respuestas (p. ej. jose@zelada.es), distinto del remitente
 
     @property
     def enabled(self) -> bool:
@@ -46,7 +47,7 @@ class SmtpConfig:
     def from_env(cls) -> "SmtpConfig":
         env = os.environ.get
         return cls(host=env("FT_SMTP_HOST", ""), port=int(env("FT_SMTP_PORT", "587")), user=env("FT_SMTP_USER", ""),
-                   password=env("FT_SMTP_PASSWORD", ""), sender=env("FT_MAIL_FROM", ""))
+                   password=env("FT_SMTP_PASSWORD", ""), sender=env("FT_MAIL_FROM", ""), reply_to=env("FT_MAIL_REPLY_TO", ""))
 
 
 class SmtpMailer:
@@ -59,6 +60,8 @@ class SmtpMailer:
         msg = EmailMessage()                              # rechaza saltos de línea en las cabeceras
         msg["From"], msg["To"], msg["Subject"] = self.cfg.sender, to, subject
         msg["Auto-Submitted"] = "auto-generated"          # que los autorrespondedores no contesten
+        if valid_email(self.cfg.reply_to):
+            msg["Reply-To"] = self.cfg.reply_to
         msg.set_content(body)
         with smtplib.SMTP(self.cfg.host, self.cfg.port, timeout=15) as smtp:
             smtp.starttls()
