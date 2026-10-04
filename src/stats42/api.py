@@ -21,10 +21,11 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from . import auth as authmod
+from . import helpboard
 from . import probe as probemod
 from . import stats
 from .client import FortyTwoClient
-from .db import User, UserSetting, make_engine, make_readonly_engine
+from .db import User, UserSetting, make_engine, make_readonly_engine, user_data_tables
 from .ratelimit import RateLimiter
 
 log = logging.getLogger("stats42.auth")
@@ -93,7 +94,8 @@ def create_app(
         """Base aparte (escribible) con lo que indica cada alumno; se crea al primer uso."""
         if "e" not in store:
             e = settings_engine or make_engine(os.environ.get("FT_SETTINGS_DATABASE_URL", "sqlite:///data/user_settings.db"))
-            UserSetting.__table__.create(e, checkfirst=True)
+            for table in user_data_tables():
+                table.create(e, checkfirst=True)
             store["e"] = e
         return store["e"]
 
@@ -281,6 +283,13 @@ def create_app(
             return JSONResponse({"detail": "No tenemos datos de tu cuenta todavía."}, status_code=404)
         return data
 
+    def origin_error(request: Request):
+        """Defensa extra contra peticiones lanzadas desde otros sitios (además de SameSite=Lax y del Content-Type JSON)."""
+        origin = request.headers.get("origin")
+        if origin and cfg.base_url and origin.rstrip("/") != cfg.base_url:
+            return JSONResponse({"detail": "Origen no permitido."}, status_code=403)
+        return None
+
     @app.post("/api/me/settings")
     def save_settings(body: SettingsIn, request: Request):
         u = current_user(request)
@@ -289,9 +298,8 @@ def create_app(
         if not settings_limiter.allow(str(u["uid"])):
             return JSONResponse({"detail": "Demasiados cambios seguidos. Espera un minuto."}, status_code=429,
                                 headers={"Retry-After": "60"})
-        origin = request.headers.get("origin")
-        if origin and cfg.base_url and origin.rstrip("/") != cfg.base_url:   # defensa extra contra peticiones de otros sitios
-            return JSONResponse({"detail": "Origen no permitido."}, status_code=403)
+        if (err := origin_error(request)) is not None:
+            return err
         today = datetime.now(timezone.utc).date()
         if body.deadline is not None and not (today - timedelta(days=60) <= body.deadline <= today + timedelta(days=800)):
             return JSONResponse({"detail": "El deadline debe estar entre hace 60 días y 800 días desde hoy."}, status_code=422)
@@ -309,6 +317,9 @@ def create_app(
             db.commit()
         return {"deadline": body.deadline.isoformat() if body.deadline else None,
                 "freeze_until": body.freeze_until.isoformat() if body.freeze_until else None}
+
+    helpboard.register(app, current_user=current_user, main_engine=engine, settings_db=settings_db,
+                       admin_logins=cfg.admin_logins, origin_error=origin_error, cursus_id=cursus_id)
 
     @app.get("/login")
     def login_page() -> FileResponse:

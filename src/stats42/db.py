@@ -173,6 +173,56 @@ class UserSetting(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class LearningResource(Base):
+    """Guía, documentación, vídeo o herramienta para estudiar un proyecto. Nunca soluciones: se aprueba a mano."""
+
+    __tablename__ = "learning_resources"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int | None] = mapped_column(Integer, index=True)   # None = general
+    title: Mapped[str] = mapped_column(String(120))
+    url: Mapped[str] = mapped_column(String(300))
+    kind: Mapped[str] = mapped_column(String(20))
+    submitted_by: Mapped[int] = mapped_column(Integer, index=True)
+    submitted_login: Mapped[str] = mapped_column(String(50))
+    status: Mapped[str] = mapped_column(String(10), default="pending", index=True)   # pending | approved | rejected
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reviewed_by: Mapped[int | None] = mapped_column(Integer)
+
+
+class MentorOffer(Base):
+    """Un alumno que se ofrece a ayudar. Solo se muestra si sigue teniendo validados los proyectos que ofrece."""
+
+    __tablename__ = "mentor_offers"
+    user_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    login: Mapped[str] = mapped_column(String(50))
+    note: Mapped[str] = mapped_column(String(200), default="")
+    active: Mapped[bool] = mapped_column(default=True, index=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class MentorProject(Base):
+    __tablename__ = "mentor_projects"
+    user_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    project_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+
+
+class HelpRequest(Base):
+    __tablename__ = "help_requests"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    login: Mapped[str] = mapped_column(String(50))
+    project_id: Mapped[int] = mapped_column(Integer, index=True)
+    message: Mapped[str] = mapped_column(String(280))
+    status: Mapped[str] = mapped_column(String(10), default="open", index=True)   # open | closed
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# Tablas de la base escribible de la web (la del campus es de solo lectura para ella).
+def user_data_tables():
+    return [UserSetting.__table__, LearningResource.__table__, MentorOffer.__table__, MentorProject.__table__,
+            HelpRequest.__table__]
+
+
 class SyncState(Base):
     """Estado de sincronización por recurso: marca de agua y checkpoint para reanudar."""
 
