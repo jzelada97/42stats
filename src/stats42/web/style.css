@@ -242,3 +242,12 @@ fieldset.checks { border: 1px solid var(--grid); border-radius: 8px; padding: 10
 .cta { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
 .proj .m a { color: var(--accent-ink); }
 @media (max-width: 760px) { .list.res li { grid-template-columns: 1fr; } .list.mentors li { grid-template-columns: 1fr; } .list.requests li { grid-template-columns: 1fr; } }
+
+/* ---- selector de cursus ---- */
+.cursus-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 4px 0; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip-btn { font: 600 13px var(--sans); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--axis); background: var(--surface); color: var(--ink); cursor: pointer; }
+.chip-btn small { color: var(--ink-2); font-weight: 500; }
+.chip-btn.on { border-color: var(--accent); background: var(--accent); color: #fff; }
+.chip-btn.on small { color: inherit; opacity: .85; }
+.chip-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

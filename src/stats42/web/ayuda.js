@@ -2,7 +2,7 @@
 
 /* Toda cadena que viene de otros alumnos se pinta con textContent (h()), nunca como HTML. Los enlaces pasan por safeUrl(). */
 
-const state = { overview: null, resources: null };
+const state = { overview: null, resources: null, cursus: undefined, chosen: new Set() };
 
 function h(tag, props = {}, ...kids) {
   const e = document.createElement(tag);
@@ -32,16 +32,45 @@ const wantedProject = (() => { const v = Number(new URLSearchParams(location.sea
 
 function fillSelect(sel, items, { general = false, only = null, selected = null } = {}) {
   clear(sel);
-  if (general) sel.append(h("option", { value: "" }, "General (todos los proyectos)"));
+  if (general) sel.append(h("option", { value: "" }, "General (todo el cursus)"));
   for (const it of items) if (!only || only.has(it.id)) sel.append(h("option", { value: String(it.id) }, it.name));
   if (selected != null && [...sel.options].some((o) => o.value === String(selected))) sel.value = String(selected);
+}
+
+/* Cursus activo: todos los desplegables solo muestran los proyectos de ese cursus (null = "Otros", sin cursus conocido). */
+const inCursus = (p) => p.cursus_id === state.cursus;
+const projectsHere = () => state.overview.projects.filter(inCursus);
+
+function renderChips() {
+  const box = clear(document.getElementById("cursus-chips"));
+  for (const c of state.overview.cursus) {
+    const on = c.id === state.cursus;
+    const b = h("button", { type: "button", class: on ? "chip-btn on" : "chip-btn", "aria-pressed": String(on) }, c.name, h("small", {}, " " + Number(c.projects)));
+    b.addEventListener("click", () => { state.cursus = c.id; renderCursus().catch(() => {}); });
+    box.append(b);
+  }
+}
+
+async function renderCursus() {
+  const o = state.overview;
+  const here = projectsHere();
+  const unvalidated = new Set(here.filter((p) => !o.validated.some((v) => v.id === p.id)).map((p) => p.id));
+  const keep = (id) => Number(document.getElementById(id).value) || wantedProject;
+  renderChips();
+  fillSelect(document.getElementById("res-project"), here, { general: true, selected: keep("res-project") });
+  fillSelect(document.getElementById("rf-project"), here, { general: true, selected: wantedProject });
+  fillSelect(document.getElementById("mentor-project"), here, { selected: keep("mentor-project") });
+  fillSelect(document.getElementById("req-project"), here, { only: unvalidated, selected: wantedProject });
+  renderOffer(o);
+  await Promise.all([loadResources(), loadMentors()]);
 }
 
 /* ---------------------------------------------------------------- recursos */
 async function loadResources() {
   const sel = document.getElementById("res-project");
   const pid = sel.value ? Number(sel.value) : null;
-  const d = await api("/api/help/resources" + (pid ? `?project_id=${pid}` : ""));
+  const query = pid ? `?project_id=${pid}` : (state.cursus ? "?cursus_id=" + Number(state.cursus) : "");
+  const d = await api("/api/help/resources" + query);
   const ul = clear(document.getElementById("res-list"));
   if (!d.resources.length) ul.append(h("li", { class: "empty" }, "Aún no hay recursos aprobados para este proyecto. Propón el primero."));
   for (const r of d.resources) {
@@ -92,14 +121,18 @@ document.getElementById("mentor-project").addEventListener("change", () => loadM
 
 function renderOffer(o) {
   const box = document.getElementById("offer-projects");
-  [...box.querySelectorAll("label")].forEach((l) => l.remove());
+  [...box.querySelectorAll("label, p")].forEach((l) => l.remove());
+  const here = o.validated.filter(inCursus);
   if (!o.validated.length) box.append(h("p", { class: "sub" }, "Aún no tenemos proyectos validados tuyos. Cuando valides alguno podrás ofrecer ayuda."));
-  const chosen = new Set(o.offer ? o.offer.project_ids : []);
-  for (const v of o.validated) {
+  else if (!here.length) box.append(h("p", { class: "sub" }, "No tienes proyectos validados en este cursus. Cambia de cursus arriba para ver los demás."));
+  const hidden = o.validated.length - here.length;
+  for (const v of here) {
     const cb = h("input", { type: "checkbox", value: String(v.id), name: "offer-project" });
-    cb.checked = chosen.has(v.id);
+    cb.checked = state.chosen.has(v.id);
+    cb.addEventListener("change", () => { if (cb.checked) state.chosen.add(v.id); else state.chosen.delete(v.id); });
     box.append(h("label", { class: "check" }, cb, " ", v.name, v.mark != null ? h("span", { class: "m" }, " (nota " + v.mark + ")") : ""));
   }
+  if (hidden > 0 && here.length) box.append(h("p", { class: "sub" }, "Y " + hidden + " validados en otros cursus (lo que hayas elegido allí se conserva)."));
   document.getElementById("offer-note").value = o.offer ? o.offer.note : "";
   document.getElementById("offer-active").checked = o.offer ? o.offer.active : true;
 }
@@ -107,7 +140,7 @@ document.getElementById("offer-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   setMsg("offer-msg", "Guardando…");
   try {
-    const ids = [...document.querySelectorAll("#offer-projects input:checked")].map((i) => Number(i.value));
+    const ids = [...state.chosen];
     await api("/api/help/offer", { active: document.getElementById("offer-active").checked, note: document.getElementById("offer-note").value, project_ids: ids });
     setMsg("offer-msg", "Guardado.");
     await refresh();
@@ -180,16 +213,14 @@ async function loadAbuse() {
 async function refresh() {
   const o = await api("/api/help/overview");
   state.overview = o;
-  const unvalidated = new Set(o.projects.filter((p) => !o.validated.some((v) => v.id === p.id)).map((p) => p.id));
-  const sel = (id) => Number(document.getElementById(id).value) || wantedProject;
-  fillSelect(document.getElementById("res-project"), o.projects, { general: true, selected: sel("res-project") });
-  fillSelect(document.getElementById("rf-project"), o.projects, { general: true, selected: wantedProject });
-  fillSelect(document.getElementById("mentor-project"), o.projects, { selected: sel("mentor-project") });
-  fillSelect(document.getElementById("req-project"), o.projects, { only: unvalidated, selected: wantedProject });
-  renderOffer(o);
+  state.chosen = new Set(o.offer ? o.offer.project_ids : []);
+  if (state.cursus === undefined || !o.cursus.some((c) => c.id === state.cursus)) {      // primera carga: el del proyecto enlazado o el principal
+    const linked = o.projects.find((p) => p.id === wantedProject);
+    state.cursus = linked ? linked.cursus_id : (o.cursus.some((c) => c.id === o.default_cursus) ? o.default_cursus : (o.cursus[0] ? o.cursus[0].id : null));
+  }
   renderRequests(o);
   document.getElementById("moderacion").hidden = !o.is_admin;
-  await Promise.all([loadResources(), loadMentors(), o.is_admin ? loadPending() : null, o.is_admin ? loadAbuse() : null]);
+  await Promise.all([renderCursus(), o.is_admin ? loadPending() : null, o.is_admin ? loadAbuse() : null]);
 }
 
 refresh().catch((e) => { document.getElementById("h-ayuda").textContent = `No se pudo cargar la sección de ayuda (${e.message}).`; });

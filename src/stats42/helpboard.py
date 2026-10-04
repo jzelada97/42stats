@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
+from collections import Counter
 import time
 import unicodedata
 from datetime import datetime, timedelta, timezone
@@ -23,6 +24,7 @@ from sqlalchemy import func, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
+from .stats import _cursus_names
 from .db import (AbuseEvent, CursusUser, HelpRequest, LearningResource, MentorOffer, MentorProject, Project, ProjectUser)
 from .ratelimit import RateLimiter
 
@@ -139,10 +141,32 @@ class RequestIn(BaseModel):
 # ---------------------------------------------------------------- consultas
 
 def project_options(ms: Session) -> list[dict]:
+    """Proyectos con actividad real, cada uno en SU cursus: el más habitual entre los intentos de los alumnos de Madrid.
+
+    El orden dentro de un cursus sigue la dificultad (que es más o menos el orden del currículo) y luego el nombre.
+    """
     rows = ms.execute(
-        select(Project.id, Project.name).join(ProjectUser, ProjectUser.project_id == Project.id)
-        .group_by(Project.id, Project.name).having(func.count() >= MIN_ATTEMPTS_FOR_OPTION).order_by(Project.name)).all()
-    return [{"id": i, "name": n} for i, n in rows]
+        select(Project.id, Project.name, Project.difficulty).join(ProjectUser, ProjectUser.project_id == Project.id)
+        .group_by(Project.id, Project.name, Project.difficulty).having(func.count() >= MIN_ATTEMPTS_FOR_OPTION)).all()
+    ids = {r[0] for r in rows}
+    seen: dict[int, Counter] = {}
+    for pid, cids in ms.execute(select(ProjectUser.project_id, ProjectUser.cursus_ids)):
+        if pid in ids and cids:
+            seen.setdefault(pid, Counter()).update(cids)
+    primary = {pid: min(c.items(), key=lambda kv: (-kv[1], kv[0]))[0] for pid, c in seen.items()}
+    rows.sort(key=lambda r: (r[2] is None, r[2] or 0, r[1].lower()))
+    return [{"id": i, "name": n, "cursus_id": primary.get(i)} for i, n, _ in rows]
+
+
+def cursus_groups(ms: Session, projects: list[dict], default_id: int) -> list[dict]:
+    """Cursus que tienen proyectos, con el principal primero y 'Otros' (sin cursus conocido) al final."""
+    names = _cursus_names(ms)
+    count = Counter(p["cursus_id"] for p in projects)
+    ordered = sorted((c for c in count if c is not None), key=lambda c: (c != default_id, -count[c], c))
+    groups = [{"id": c, "name": names.get(c, f"Cursus {c}"), "projects": count[c]} for c in ordered]
+    if None in count:
+        groups.append({"id": None, "name": "Otros", "projects": count[None]})
+    return groups
 
 
 def validated_projects(ms: Session, user_id: int) -> dict[int, dict]:
@@ -304,7 +328,8 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
             validated = validated_projects(ms, uid)
             offer = db.get(MentorOffer, uid)
             offered = [p for (p,) in db.execute(select(MentorProject.project_id).where(MentorProject.user_id == uid))]
-            names = {o["id"]: o["name"] for o in options(ms)}
+            by_id = {o["id"]: o for o in options(ms)}
+            names = {i: o["name"] for i, o in by_id.items()}
             mine = []
             for r in db.execute(_live_requests(db, user_id=uid).order_by(HelpRequest.created_at.desc())).scalars():
                 mine.append({"id": r.id, "project_id": r.project_id, "project": names.get(r.project_id, "?"), "message": r.message,
@@ -313,7 +338,10 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
             return {
                 "is_admin": is_admin(u),
                 "projects": options(ms),
-                "validated": sorted(validated.values(), key=lambda v: v["name"]),
+                "cursus": cursus_groups(ms, options(ms), cursus_id),
+                "default_cursus": cursus_id,
+                "validated": sorted(({**v, "cursus_id": by_id.get(v["id"], {}).get("cursus_id")} for v in validated.values()),
+                                    key=lambda v: v["name"]),
                 "offer": {"active": offer.active, "note": offer.note, "project_ids": sorted(offered)} if offer else None,
                 "requests": mine,
                 "incoming": incoming_requests(db, ms, uid, cursus_id),
@@ -329,7 +357,8 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
             return {"project_id": project_id, "mentors": mentors_for(db, ms, project_id, u["uid"], cursus_id)}
 
     @app.get("/api/help/resources", dependencies=guard)
-    def resources(request: Request, project_id: Annotated[int | None, Query(ge=1, le=MAX_ID)] = None):
+    def resources(request: Request, project_id: Annotated[int | None, Query(ge=1, le=MAX_ID)] = None,
+                  cursus_id: Annotated[int | None, Query(ge=1, le=MAX_ID)] = None):
         u = current_user(request)
         if u is None:
             return unauth()
@@ -338,6 +367,9 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
             stmt = select(LearningResource).where(LearningResource.status == "approved")
             if project_id is not None:
                 stmt = stmt.where((LearningResource.project_id == project_id) | LearningResource.project_id.is_(None))
+            elif cursus_id is not None:             # todo un cursus: sus proyectos y lo general
+                of_cursus = [o["id"] for o in options(ms) if o["cursus_id"] == cursus_id]
+                stmt = stmt.where(LearningResource.project_id.in_(of_cursus) | LearningResource.project_id.is_(None))
             rows = db.execute(stmt.order_by(LearningResource.created_at.desc()).limit(60)).scalars().all()
             mine = db.execute(select(LearningResource).where(LearningResource.submitted_by == u["uid"], LearningResource.status != "approved")
                               .order_by(LearningResource.created_at.desc()).limit(10)).scalars().all()
