@@ -1,6 +1,6 @@
 """Avisos por correo: opt-in explícito (pasando por 42), plantillas fijas, topes y nada que se pueda usar como altavoz."""
 import smtplib
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -231,7 +231,7 @@ def test_daily_cap_per_recipient(engine, store, monkeypatch):
     assert len(mailer.sent) == 1                                                                     # el segundo aviso del día no sale
     with Session(store) as db:
         pref = db.get(MailPref, 15)
-        pref.sent_day = date.today() - timedelta(days=2)                                             # al día siguiente el contador se reinicia
+        pref.sent_day = datetime.now(timezone.utc).date() - timedelta(days=2)                                             # al día siguiente el contador se reinicia
         db.commit()
     post(mentor, f"/api/help/requests/{rid}/withdraw")
     post(mentor, f"/api/help/requests/{rid}/offer")
@@ -262,7 +262,7 @@ def test_the_daily_digest_goes_only_to_opted_in_mentors_with_unanswered_requests
     assert "u15" not in body and HOSTILE not in body and MSG not in body                            # solo proyectos y cifras
     assert n.digest() == 0                                                                           # no se repite el mismo día
     with Session(store) as db:
-        assert db.get(MailPref, 13).last_digest == date.today()
+        assert db.get(MailPref, 13).last_digest == datetime.now(timezone.utc).date()
 
 
 def test_no_digest_when_the_mentor_already_offered_or_nothing_is_waiting(engine, store):

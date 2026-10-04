@@ -272,9 +272,9 @@ def test_failed_exchange_logs_42s_reason_but_never_the_code_or_secret(engine, ca
 
 # ---------------------------------------------------------------- deadline y freeze indicados por el alumno
 
-from datetime import date, timedelta  # noqa: E402
+from datetime import date, datetime, timedelta, timezone  # noqa: E402,F401
 
-TODAY = date.today()
+TODAY = datetime.now(timezone.utc).date()                 # el servidor cuenta los días en UTC: así no falla entre medianoche local y UTC
 ORIGIN = {"Origin": "https://42madrid.example"}
 
 
