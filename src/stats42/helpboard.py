@@ -155,6 +155,17 @@ def mentors_for(db: Session, ms: Session, project_id: int, exclude_uid: int, cur
     return out
 
 
+def project_help_counts(db: Session, ms: Session, project_ids: list[int], uid: int, cursus_id: int) -> dict[int, dict]:
+    """Mentores disponibles y recursos aprobados para cada proyecto (para mostrar ayuda junto al proyecto en curso)."""
+    out = {}
+    for pid in project_ids:
+        res = db.scalar(select(func.count()).select_from(LearningResource).where(
+            LearningResource.status == "approved",
+            (LearningResource.project_id == pid) | LearningResource.project_id.is_(None))) or 0
+        out[pid] = {"mentors": len(mentors_for(db, ms, pid, uid, cursus_id, limit=20)), "resources": res}
+    return out
+
+
 def _live_requests(db: Session, **where):
     since = utcnow() - REQUEST_TTL
     stmt = select(HelpRequest).where(HelpRequest.status == "open", HelpRequest.created_at >= since.replace(tzinfo=None))

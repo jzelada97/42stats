@@ -68,7 +68,7 @@ def test_worst_student_needs_attention_and_gets_actionable_tips(engine):
     assert {x["key"]: x["state"] for x in a["signals"]} == {"activity": "warn", "pace": "warn", "milestone": "warn", "evaluations": "warn"}
     assert a["next_milestone"] == {"label": "Rank 00", "days_since_last": 300, "typical_days": 30.0}
     assert len(a["tips"]) >= 4 and any("100 días" in t for t in a["tips"])    # el proyecto en curso lleva 100 días
-    assert a["projects"]["in_progress"] == [{"name": "libft", "days": 100}]
+    assert a["projects"]["in_progress"] == [{"id": 1, "name": "libft", "days": 100, "context": None}]   # pocos intentos: sin contexto
     assert a["level_context"]["percentile"] < 0.1
 
 
@@ -139,3 +139,75 @@ def test_no_settings_means_no_deadline_signal_and_nothing_reported(engine):
 def test_deadline_during_freeze_is_paused_not_alarming(engine):
     a = analyse_with(engine, 6, {"deadline": day(5), "freeze_until": day(30)})
     assert next(x for x in a["signals"] if x["key"] == "deadline")["state"] == "ok"
+
+
+# ---------------------------------------------------------------- contexto de proyecto y hábitos
+
+def add_attempts(engine, validated=8, failed=4, cheat=3, days=4):
+    with Session(engine) as s:
+        k = 1000
+        for _ in range(validated):
+            k += 1
+            s.add(ProjectUser(id=k, user_id=50 + k, project_id=1, status="finished", validated=True, final_mark=100,
+                              created_at=NOW - timedelta(days=days + 30), marked_at=NOW - timedelta(days=30)))
+        for _ in range(failed):
+            k += 1
+            s.add(ProjectUser(id=k, user_id=50 + k, project_id=1, status="finished", validated=False, final_mark=50,
+                              created_at=NOW - timedelta(days=60), marked_at=NOW - timedelta(days=50)))
+        for _ in range(cheat):                       # -42 = cheating: no cuenta
+            k += 1
+            s.add(ProjectUser(id=k, user_id=50 + k, project_id=1, status="finished", validated=False, final_mark=-42,
+                              created_at=NOW - timedelta(days=60), marked_at=NOW - timedelta(days=50)))
+        s.commit()
+
+
+def test_project_context_validation_rate_median_days_and_marks(engine):
+    add_attempts(engine)
+    with Session(engine) as s:
+        c = stats.project_context(s, 1)
+    # 8 validados de 4 días + el del alumno 12 (20 días) + 4 suspensos; los 3 con -42 no cuentan
+    assert c["attempts"] == 13 and c["validation_rate"] == round(9 / 13, 3)
+    assert c["median_days"] == 4.0 and c["avg_mark"] == 100.0
+
+
+def test_project_context_needs_enough_attempts(engine):
+    with Session(engine) as s:
+        assert stats.project_context(s, 1) is None and stats.project_context(s, 999) is None
+
+
+def test_in_progress_project_gets_its_context(engine):
+    add_attempts(engine)
+    a = analyse(engine, 1)
+    p = a["projects"]["in_progress"][0]
+    assert p["context"]["median_days"] == 4.0 and p["context"]["validation_rate"] > 0.6
+    assert any("Lo habitual para validarlo son 4 días" in t for t in a["tips"])        # el consejo cita el dato real
+
+
+def synthetic_ctx(n=80):
+    # ritmo creciente y, con él, horas crecientes: i / 10 niveles al mes y i horas
+    return {"pace_hours": [(i / 10, float(i)) for i in range(n)]}
+
+
+def test_habits_split_students_into_four_pace_quartiles(engine):
+    h = stats.habits_from_ctx(synthetic_ctx())
+    assert [q["n"] for q in h["quartiles"]] == [20] * 4 and h["students"] == 80
+    meds = [q["median_hours_30d"] for q in h["quartiles"]]
+    assert meds == sorted(meds) and meds[0] < meds[-1]
+    assert [q["label"] for q in h["quartiles"]][0] == "25 % más lento" and len(h["bounds"]) == 3
+
+
+def test_habits_need_a_minimum_number_of_students():
+    assert stats.habits_from_ctx(synthetic_ctx(39)) is None and stats.habits_from_ctx({}) is None
+
+
+def test_my_habits_places_me_in_my_quartile(engine):
+    with Session(engine) as s:
+        ctx = stats.cohort_context(s, 21, NOW)
+        ctx["pace_hours"] = synthetic_ctx()["pace_hours"]
+        a = stats.me(s, 12, ctx, 21, NOW)
+    assert a["habits"]["mine"]["quartile"] == 0 and a["habits"]["mine"]["hours_30d"] > 20     # ritmo 0,66: el cuartil más lento
+    assert "user_id" not in str(a["habits"]) and len(a["habits"]["quartiles"]) == 4
+
+
+def test_habits_are_absent_when_the_cohort_is_too_small(engine):
+    assert analyse(engine, 12)["habits"] is None

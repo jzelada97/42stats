@@ -315,3 +315,25 @@ def test_flooding_with_invalid_attempts_is_still_capped(engine, store):
     c = user(engine, store, 15)
     codes = [post(c, "/api/help/requests", project_id=1, message="x").status_code for _ in range(62)]
     assert codes[:60] == [422] * 60 and codes[60:] == [429, 429]
+
+
+def test_in_progress_projects_show_how_much_help_exists(engine, store):
+    with Session(engine) as s:
+        s.add(ProjectUser(id=9001, user_id=15, project_id=1, status="in_progress", created_at=NOW - timedelta(days=12)))
+        s.commit()
+    post(user(engine, store, 13), "/api/help/offer", active=True, project_ids=[1])
+    post(user(engine, store, 14), "/api/help/offer", active=True, project_ids=[1, 3])
+    c = user(engine, store, 15)
+    rid = post(c, "/api/help/resources", **GOOD).json()["id"]
+    admin = user(engine, store, 14, cfg=ADMIN_CFG)
+    admin.post(f"/api/admin/help/resources/{rid}/approve", headers=ORIGIN, json={})
+    p = c.get("/api/me").json()["projects"]["in_progress"][0]
+    assert (p["name"], p["mentors"], p["resources"]) == ("libft", 2, 1)
+    assert "user_id" not in str(p)
+
+
+def test_habits_endpoint_is_for_members_only_and_aggregated(engine, store):
+    anon, _ = make_client(engine, settings_engine=store)
+    assert anon.get("/api/habits").status_code == 401
+    r = user(engine, store, 15).get("/api/habits")
+    assert r.status_code == 200 and r.json()["quartiles"] == []            # cohorte demasiado pequeña en el test: sin cifras

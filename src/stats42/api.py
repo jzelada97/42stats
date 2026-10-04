@@ -165,6 +165,11 @@ def create_app(
     def milestones(s: Session = Depends(session)) -> dict:
         return cached("milestones", lambda: stats.milestones(s, cursus_id))
 
+    @app.get("/api/habits", dependencies=[Depends(member)])
+    def habits(s: Session = Depends(session)) -> dict:
+        ctx = cached("me_ctx", lambda: stats.cohort_context(s, cursus_id))
+        return stats.habits_from_ctx(ctx) or {"students": 0, "quartiles": [], "bounds": []}
+
     @app.get("/api/signups", dependencies=[Depends(member)])
     def signups(s: Session = Depends(session)) -> list[dict]:
         return cached("signups", lambda: stats.signups(s))
@@ -281,6 +286,10 @@ def create_app(
         data = stats.me(s, u["uid"], ctx, cursus_id, settings=mine)
         if data is None:
             return JSONResponse({"detail": "No tenemos datos de tu cuenta todavía."}, status_code=404)
+        with Session(settings_db()) as db:                 # ayuda disponible para cada proyecto en curso
+            counts = helpboard.project_help_counts(db, s, [p["id"] for p in data["projects"]["in_progress"]], u["uid"], cursus_id)
+        for p in data["projects"]["in_progress"]:
+            p.update(counts.get(p["id"], {"mentors": 0, "resources": 0}))
         return data
 
     def origin_error(request: Request):

@@ -610,14 +610,16 @@ def cohort_context(s: Session, cursus_id: int = 21, now: datetime | None = None)
     begin = {uid: _aware(b) for uid, b in s.execute(
         select(CursusUser.user_id, CursusUser.begin_at).where(CursusUser.cursus_id == cursus_id)).all()}
     current = [m for m in members if m["current"] and m["level"] is not None]
-    paces = sorted(m["level"] / (((now - begin[m["user_id"]]).days / 30.44))
-                   for m in current if begin.get(m["user_id"]) and (now - begin[m["user_id"]]).days >= 91)
     hours = _hours_by_user(s, now, 30)
+    pairs = [(m["level"] / ((now - begin[m["user_id"]]).days / 30.44), hours.get(m["user_id"], 0.0))
+             for m in current if begin.get(m["user_id"]) and (now - begin[m["user_id"]]).days >= 91]
+    paces = sorted(p for p, _ in pairs)
     open_ids = [m["user_id"] for m in members if m["current"]]
     levels = Counter(int(m["level"]) for m in current)
     ms = milestones(s, cursus_id, now)
     return {
         "paces": paces,
+        "pace_hours": pairs,
         "hours": sorted(hours.get(u, 0.0) for u in open_ids),
         "hours_by_user": dict(hours),
         "level_hist": [{"level": n, "count": levels.get(n, 0)} for n in range(0, (max(levels) if levels else 0) + 1)],
@@ -625,8 +627,55 @@ def cohort_context(s: Session, cursus_id: int = 21, now: datetime | None = None)
     }
 
 
+HABIT_LABELS = ["25 % más lento", "Medio-lento", "Medio-rápido", "25 % más rápido"]
+
+
+def habits_from_ctx(ctx: dict, min_students: int = 40) -> dict | None:
+    """Horas de uso de cada cuartil de ritmo de progreso (nivel por mes). Solo agregados; correlación, no causa."""
+    pairs = sorted(ctx.get("pace_hours") or [])
+    n = len(pairs)
+    if n < min_students:
+        return None
+    groups = [pairs[i * n // 4:(i + 1) * n // 4] for i in range(4)]
+    return {
+        "students": n,
+        "quartiles": [{"label": HABIT_LABELS[i], "n": len(g), "median_hours_30d": round(statistics.median(h for _, h in g), 1),
+                       "pace_max": round(g[-1][0], 2)} for i, g in enumerate(groups)],
+        "bounds": [round(pairs[n // 4][0], 4), round(pairs[n // 2][0], 4), round(pairs[3 * n // 4][0], 4)],
+    }
+
+
+def project_context(s: Session, project_id: int, min_attempts: int = 10) -> dict | None:
+    """Cómo les va a los alumnos con un proyecto: intentos terminados, porcentaje que valida, mediana de días y nota media."""
+    rows = s.execute(select(ProjectUser.validated, ProjectUser.created_at, ProjectUser.marked_at, ProjectUser.final_mark)
+                     .where(ProjectUser.project_id == project_id, _done(), _not_cheat())).all()
+    if len(rows) < min_attempts:
+        return None
+    validated = [r for r in rows if r.validated is True]
+    days = []
+    for r in validated:
+        if r.created_at and r.marked_at:
+            d = (_aware(r.marked_at) - _aware(r.created_at)).total_seconds() / 86400
+            if d >= 0:
+                days.append(d)
+    marks = [r.final_mark for r in validated if r.final_mark is not None and MARK_MIN <= r.final_mark <= MARK_MAX]
+    return {"attempts": len(rows), "validation_rate": round(len(validated) / len(rows), 3),
+            "median_days": round(statistics.median(days), 1) if days else None,
+            "avg_mark": round(sum(marks) / len(marks), 1) if marks else None}
+
+
 def _sig(key: str, label: str, state: str, value: str, detail: str) -> dict:
     return {"key": key, "label": label, "state": state, "value": value, "detail": detail}
+
+
+def _my_habits(ctx: dict, my_pace: float | None, hours30: float) -> dict | None:
+    h = habits_from_ctx(ctx)
+    if h is None:
+        return None
+    mine = None
+    if my_pace is not None:
+        mine = {"quartile": sum(1 for b in h["bounds"] if my_pace >= b), "hours_30d": round(hours30, 1)}
+    return {"students": h["students"], "quartiles": h["quartiles"], "mine": mine}
 
 
 def me(s: Session, user_id: int, ctx: dict, cursus_id: int = 21, now: datetime | None = None,
@@ -775,14 +824,19 @@ def me(s: Session, user_id: int, ctx: dict, cursus_id: int = 21, now: datetime |
                         e_detail + (f" Puntos de corrección: {points}." if points is not None else "")))
 
     ongoing = []
-    for name, created in s.execute(select(Project.name, ProjectUser.created_at).join(Project, Project.id == ProjectUser.project_id)
-                                   .where(ProjectUser.user_id == user_id, ProjectUser.status == "in_progress")
-                                   .order_by(ProjectUser.created_at)):
+    for pid, name, created in s.execute(select(Project.id, Project.name, ProjectUser.created_at)
+                                        .join(Project, Project.id == ProjectUser.project_id)
+                                        .where(ProjectUser.user_id == user_id, ProjectUser.status == "in_progress")
+                                        .order_by(ProjectUser.created_at)):
         c = _aware(created)
-        ongoing.append({"name": name, "days": (now - c).days if c else None})
+        ongoing.append({"id": pid, "name": name, "days": (now - c).days if c else None})
+    for o in ongoing[:8]:
+        o["context"] = project_context(s, o["id"])
     stuck = [o for o in ongoing if o["days"] is not None and o["days"] > 60]
     if stuck:
-        tips.append(f"Tienes «{stuck[0]['name']}» en curso desde hace {stuck[0]['days']} días. Si estás bloqueado, divide el proyecto en partes pequeñas y avanza una por sesión.")
+        ctx_p = stuck[0].get("context") or {}
+        typical = f" Lo habitual para validarlo son {ctx_p['median_days']:.0f} días." if ctx_p.get("median_days") else ""
+        tips.append(f"Tienes «{stuck[0]['name']}» en curso desde hace {stuck[0]['days']} días.{typical} Si estás bloqueado, divide el proyecto en partes pequeñas y avanza una por sesión, o pide ayuda en la sección Ayuda.")
     validated90 = s.scalar(select(func.count()).select_from(ProjectUser).where(
         ProjectUser.user_id == user_id, ProjectUser.validated.is_(True), ProjectUser.marked_at >= now - timedelta(days=90))) or 0
 
@@ -821,6 +875,7 @@ def me(s: Session, user_id: int, ctx: dict, cursus_id: int = 21, now: datetime |
                      "weekly": [{"week": w.isoformat(), "hours": round(h, 1)} for w, h in weekly.items()]},
         "projects": {"validated_90d": validated90, "in_progress": ongoing[:8]},
         "evaluations": {"done_90d": evals90, "correction_points": points},
+        "habits": _my_habits(ctx, my_pace, hours30),
         "self_reported": {"deadline": deadline.isoformat() if deadline else None,
                           "freeze_until": freeze_until.isoformat() if freeze_until else None,
                           "frozen": bool(frozen), "days_to_deadline": days_left},
