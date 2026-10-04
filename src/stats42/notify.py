@@ -19,7 +19,7 @@ DAILY_CAP = 6
 _LOGIN = re.compile(r"^[a-z0-9][a-z0-9_-]{1,29}$", re.I)
 _CTRL = re.compile(r"[\x00-\x1f\x7f]")
 
-FOOT = "\n—\nRecibes este correo porque activaste los avisos en {base}/ayuda. Puedes desactivarlos cuando quieras en {base}/ayuda#avisos.\n"
+FOOT = "\n\n—\nRecibes este correo porque activaste los avisos en {base}/ayuda. Puedes desactivarlos cuando quieras en {base}/ayuda#avisos.\n"
 
 
 def _clean(text: str) -> str:
