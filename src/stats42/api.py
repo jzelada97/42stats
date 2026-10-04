@@ -266,6 +266,13 @@ def create_app(
         except Exception as e:  # nunca debe afectar al login, pero tampoco fallar en silencio
             log.warning("sondeo de administrador falló (%s)", type(e).__name__)
 
+    def bad_state(request: Request, why: str):
+        """Un callback que no cuadra. Si ya tienes sesión (atrás, recarga, doble clic, dos pestañas) no es un error: sigue a /me."""
+        log.info("login: estado no válido (%s)", why)
+        if current_user(request) is not None:
+            return RedirectResponse("/me", status_code=302)
+        return _fail("estado")
+
     def finish_login(request: Request, code: str | None, state: str | None, error: str | None):
         if not cfg.enabled:
             return JSONResponse({"detail": "El login con 42 aún no está configurado."}, status_code=503)
@@ -273,14 +280,21 @@ def create_app(
             return _fail("limite")
         if error:
             return _fail("denegado")
-        expected = authmod.unsign(cfg, "state", request.cookies.get(authmod.STATE_COOKIE), authmod.STATE_TTL)
-        if not code or not state or not expected or state != expected:
-            return _fail("estado")
+        raw = request.cookies.get(authmod.STATE_COOKIE)
+        expected = authmod.unsign(cfg, "state", raw, authmod.STATE_TTL)
+        if not code or not state:
+            return bad_state(request, "faltan code o state en la URL")
+        if not raw:
+            return bad_state(request, "el navegador no envió la cookie de estado")
+        if not expected:
+            return bad_state(request, "cookie de estado caducada (más de 10 min) o manipulada")
+        if state != expected:
+            return bad_state(request, "el state de la URL no es el de la cookie (¿otra pestaña?)")
         now = time.monotonic()
         for k in [k for k, t in used_states.items() if now - t > authmod.STATE_TTL]:
             used_states.pop(k, None)
         if state in used_states:
-            return _fail("estado")
+            return bad_state(request, "state ya usado")
         used_states[state] = now
         if not exchange_limiter.allow("42"):
             log.warning("límite global de canjes con 42 alcanzado")
@@ -418,7 +432,9 @@ def create_app(
                        admin_logins=cfg.admin_logins, origin_error=origin_error, cursus_id=cursus_id, abuse=abuse)
 
     @app.get("/login")
-    def login_page() -> FileResponse:
+    def login_page(request: Request):
+        if current_user(request) is not None and not request.query_params.get("error"):
+            return RedirectResponse("/me", status_code=302)       # ya has entrado: no hace falta volver a pulsar "Entrar con 42"
         return FileResponse(WEB_DIR / "login.html", media_type="text/html; charset=utf-8")
 
     @app.get("/me")

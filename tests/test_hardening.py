@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from stats42 import auth as authmod
 from stats42.db import HelpRequest, LearningResource, MentorOffer, UserSession, UserSetting
 from stats42.helpboard import MAX_MARKS, clean_text, purge, validate_url
 
@@ -66,7 +67,31 @@ def test_a_login_callback_can_only_be_used_once_per_state(auth_engine):
     state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
     assert c.get("/auth/callback", params={"code": "CODE", "state": state}).headers["location"] == "/me"
     again = c.get("/auth/callback", params={"code": "CODE", "state": state})                     # repetir el mismo callback
-    assert again.headers["location"] == "/login?error=estado"
+    assert again.headers["location"] == "/me"                                                    # ya tienes sesión: sigue, sin error
+    fresh = TestClient(c.app, follow_redirects=False, base_url="https://42madrid.example")
+    fresh.cookies.set(authmod.STATE_COOKIE, c.cookies.get(authmod.STATE_COOKIE) or "x")
+    assert fresh.get("/auth/callback", params={"code": "CODE", "state": state}).headers["location"] == "/login?error=estado"
+
+
+def test_a_repeated_callback_never_calls_42_twice_and_does_not_scare_a_logged_in_user(auth_engine):
+    c, seen = make_client(auth_engine)
+    state = parse_qs(urlparse(c.get("/auth/login").headers["location"]).query)["state"][0]
+    c.get("/auth/callback", params={"code": "CODE", "state": state})
+    first = dict(seen)
+    for _ in range(3):                                                                           # atrás, recarga, doble clic...
+        assert c.get("/auth/callback", params={"code": "CODE", "state": state}).headers["location"] == "/me"
+    assert seen == first
+    assert c.get("/login").headers["location"] == "/me"                                          # con sesión, /login lleva al panel
+
+
+def test_the_login_failure_reasons_are_logged_without_secrets(auth_engine, caplog):
+    import logging
+    c, _ = make_client(auth_engine)
+    with caplog.at_level(logging.INFO, logger="stats42.auth"):
+        c.get("/auth/callback", params={"code": "SECRETO", "state": "x"})                        # sin cookie de estado
+        c.cookies.set(authmod.STATE_COOKIE, "basura")
+        c.get("/auth/callback", params={"code": "SECRETO", "state": "x"})                        # cookie manipulada
+    assert "no envió la cookie de estado" in caplog.text and "caducada" in caplog.text and "SECRETO" not in caplog.text
 
 
 # ---------------------------------------------------------------- borrar mis datos y retención
