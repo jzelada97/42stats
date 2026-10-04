@@ -311,3 +311,31 @@ def test_logs_never_contain_the_address_or_the_text(engine, store, caplog):
         post(mentor, f"/api/help/requests/{rid}/offer")
     assert "asker@student.42madrid.com" not in caplog.text and "SMTP caído" not in caplog.text and "RuntimeError" in caplog.text
     assert NOW  # silencia el aviso de importación sin usar
+
+
+# ---------------------------------------------------------------- stats42 mailtest
+
+def test_mailtest_sends_one_message_to_the_given_address(monkeypatch):
+    mailer = FakeMailer()
+    monkeypatch.setattr(mailmod, "from_env", lambda: mailer)
+    r = CliRunner().invoke(cli_app, ["mailtest", "--to", "ana@student.42madrid.com"])
+    assert r.exit_code == 0 and "Enviado a ana@student.42madrid.com" in r.output
+    assert [(to, subj) for to, subj, _ in mailer.sent] == [("ana@student.42madrid.com", "Prueba de 42stats")]
+
+
+def test_mailtest_rejects_bad_addresses_and_missing_configuration(monkeypatch):
+    for k in ("FT_SMTP_HOST", "FT_MAIL_FROM"):
+        monkeypatch.delenv(k, raising=False)
+    assert CliRunner().invoke(cli_app, ["mailtest", "--to", "no-es-correo"]).exit_code == 2
+    r = CliRunner().invoke(cli_app, ["mailtest", "--to", "ana@x.es"])
+    assert r.exit_code == 1 and "FT_SMTP_HOST" in r.output
+
+
+def test_mailtest_explains_a_wrong_smtp_key_without_printing_secrets(monkeypatch):
+    class Rejecting:
+        def send(self, *a):
+            raise smtplib.SMTPAuthenticationError(535, b"5.7.8 Authentication failed")
+    monkeypatch.setattr(mailmod, "from_env", lambda: Rejecting())
+    monkeypatch.setenv("FT_SMTP_PASSWORD", "clave-super-secreta")
+    r = CliRunner().invoke(cli_app, ["mailtest", "--to", "ana@x.es"])
+    assert r.exit_code == 1 and "SMTP key" in r.output and "clave-super-secreta" not in r.output

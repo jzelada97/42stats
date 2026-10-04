@@ -85,3 +85,16 @@ bambú), con una sola página de entrada que el servidor devuelve en `/`, `/logi
   que el código no use `dangerouslySetInnerHTML` ni `innerHTML`, que cada `href` pase por `safeUrl`/`profileUrl` y que la compilación
   real sea compatible con el CSP.
 
+## Avisos por correo (opt-in) con Brevo
+
+Los avisos son opcionales: sin `FT_SMTP_HOST` y `FT_MAIL_FROM` la web no los ofrece. Brevo tiene un plan gratuito de 300 correos al día.
+
+1. Crea una cuenta en Brevo, añade tu dominio y autentícalo (registros DNS de DKIM y DMARC).
+2. En *Settings > SMTP & API* copia el **Login** (un correo único) y crea una **SMTP key**: es la contraseña (no la de la cuenta ni una API key).
+3. Pon en `.env.web` (nunca en git): `FT_SMTP_HOST=smtp-relay.brevo.com`, `FT_SMTP_PORT=587`, `FT_SMTP_USER=<login>`,
+   `FT_SMTP_PASSWORD=<smtp key>` y `FT_MAIL_FROM=42stats <avisos@tudominio>` (el remitente debe estar en el dominio autenticado).
+4. Prueba: `docker compose -f docker-compose.vm.yml run --rm web mailtest --to tu@correo` (o `stats42 mailtest --to ...` en local).
+5. Resumen diario a los mentores: instala `deploy/stats42-notify.timer` (`systemctl enable --now stats42-notify.timer`).
+
+`src/stats42/mailer.py` solo usa la biblioteca estándar: se puede copiar tal cual a otro proyecto.
+

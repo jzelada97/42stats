@@ -1,4 +1,4 @@
-"""CLI: `stats42 check | sync | status | backup`."""
+"""CLI: `stats42 check | sync | status | backup | notify | mailtest`."""
 from __future__ import annotations
 
 import logging
@@ -159,6 +159,32 @@ def notify() -> None:
     n = Notifier(lambda: settings, make_engine(os.environ.get("FT_DATABASE_URL", "sqlite:///data/stats42.db")), mailer,
                  os.environ.get("FT_BASE_URL", ""), sync=True).digest(int(os.environ.get("FT_CURSUS_ID", "21")))
     typer.echo(f"Resúmenes enviados: {n}")
+
+
+@app.command()
+def mailtest(to: str = typer.Option(..., "--to", help="Dirección a la que enviar la prueba.")) -> None:
+    """Envía un correo de prueba con la configuración SMTP actual (FT_SMTP_*): para comprobar Brevo u otro servicio antes de usarlo."""
+    import smtplib
+
+    from . import mailer as mailmod
+
+    if not mailmod.valid_email(to):
+        typer.secho("La dirección no es válida.", fg="red")
+        raise typer.Exit(2)
+    mailer = mailmod.from_env()
+    if mailer is None:
+        typer.secho("Faltan FT_SMTP_HOST y FT_MAIL_FROM (mira .env.example).", fg="red")
+        raise typer.Exit(1)
+    try:
+        mailer.send(to, "Prueba de 42stats", "Si lees esto, el envío por SMTP funciona.\n\nPuedes ignorar este mensaje.")
+    except smtplib.SMTPAuthenticationError:
+        typer.secho("El servidor rechazó el usuario o la clave. En Brevo la contraseña es la «SMTP key» (Settings > SMTP & API), "
+                    "no la contraseña de la cuenta ni una API key.", fg="red")
+        raise typer.Exit(1)
+    except Exception as e:      # el texto del error del servidor no lleva secretos; la configuración nunca se imprime
+        typer.secho(f"No se pudo enviar ({type(e).__name__}): {str(e)[:200]}", fg="red")
+        raise typer.Exit(1)
+    typer.secho(f"Enviado a {to}. Mira también la carpeta de spam.", fg="green")
 
 
 @app.command()
