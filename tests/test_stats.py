@@ -223,7 +223,7 @@ def test_api_returns_503_when_tables_missing():
 
 def test_index_and_static_assets_served():
     web = TestClient(create_app(create_engine("sqlite://"), 21))
-    r = web.get("/")
+    r = web.get("/campus")
     assert r.status_code == 200 and "42" in r.text
     assert r.text.count("<script") == r.text.count('<script src="/static/')  # sin JS inline (la CSP lo bloquea)
     for page in ("/login",):

@@ -24,7 +24,7 @@ from .db import User, make_readonly_engine
 
 log = logging.getLogger("stats42.auth")
 WEB_DIR = Path(__file__).parent / "web"
-PRIVATE_PATHS = {"/api/me", "/api/session", "/me", "/login"}
+PRIVATE_PATHS = {"/", "/api/me", "/api/session", "/me", "/login"}
 CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:"
 
 # TTL en segundos por consulta: las pesadas se recalculan poco; los datos cambian una vez al día.
@@ -225,6 +225,12 @@ def create_app(
         # Si en 42 solo se pudo registrar el dominio como dirección de retorno, el login termina aquí.
         if state and (code or error):
             return finish_login(request, code, state, error)
+        if current_user(request) is not None:
+            return RedirectResponse("/me", status_code=302)
+        return FileResponse(WEB_DIR / "login.html", media_type="text/html; charset=utf-8")
+
+    @app.get("/campus")
+    def campus_page() -> FileResponse:
         return FileResponse(WEB_DIR / "index.html", media_type="text/html; charset=utf-8")
 
     app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")

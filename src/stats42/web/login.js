@@ -23,3 +23,11 @@ fetch("/api/session").then((r) => r.json()).then((u) => {
     b.removeAttribute("href");
   }
 }).catch(() => {});
+
+fetch("/api/overview").then((r) => r.ok ? r.json() : Promise.reject()).then((o) => {
+  const nf = new Intl.NumberFormat("es-ES");
+  const tile = (v, l) => `<div class="tile"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+  document.getElementById("teaser-tiles").innerHTML = tile(nf.format(o.cursus_current), "alumnos con el 42cursus abierto")
+    + tile(o.avg_level == null ? "–" : nf.format(o.avg_level), "nivel medio") + tile(nf.format(o.students), "alumnos registrados");
+  document.getElementById("teaser").hidden = false;
+}).catch(() => {});

@@ -12,7 +12,7 @@
 <header class="bar">
   <div class="bar-in">
     <a class="brand" href="/">42 Madrid<small>/ campus 22</small></a>
-    <nav aria-label="Secciones"><a href="/">Estadísticas del campus</a></nav>
+    <nav aria-label="Secciones"><a href="/campus">Estadísticas del campus</a></nav>
     <button id="theme" type="button" aria-label="Cambiar tema">auto</button>
   </div>
 </header>
@@ -34,6 +34,12 @@
       <li><b>Qué guardamos:</b> una cookie de sesión con tu login. <b>No guardamos tu token.</b> Solo tú ves tus datos.</li>
       <li><b>Qué no vemos:</b> tu deadline de milestone y tu freeze no están en la API pública de 42, así que no podemos mostrarlos todavía.</li>
     </ul>
+  </section>
+
+  <section class="login-teaser" aria-label="El campus hoy" id="teaser" hidden>
+    <div class="kicker">el campus hoy</div>
+    <div class="tiles" id="teaser-tiles"></div>
+    <a class="sub" href="/campus">Ver todas las estadísticas del campus →</a>
   </section>
 </main>
 

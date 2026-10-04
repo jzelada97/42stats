@@ -208,3 +208,5 @@ footer a { color: var(--ink-2); }
 .mt { margin-top: 16px; }
 .list.plain li { grid-template-columns: 1fr auto; }
 @media (max-width: 760px) { .status { grid-template-columns: 1fr; } .tl li { grid-template-columns: 70px 90px 1fr; } .auth-link { display: none; } }
+
+.login-teaser { max-width: 560px; width: 100%; display: grid; gap: 12px; margin-top: 8px; }

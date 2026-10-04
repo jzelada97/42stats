@@ -232,9 +232,19 @@ def test_callback_also_works_on_the_site_root_when_only_the_domain_is_registered
     assert c.get("/api/session").json()["logged_in"] is True
 
 
-def test_root_without_oauth_params_still_serves_the_dashboard_and_ignores_forged_state(engine):
+def test_root_is_the_login_screen_for_visitors_and_sends_members_to_their_panel(engine):
     c, _ = make_client(engine)
-    assert c.get("/").status_code == 200
+    r = c.get("/")
+    assert r.status_code == 200 and "Entrar con 42" in r.text and r.headers["cache-control"] == "no-store"
+    assert "Resumen" not in r.text                                  # la portada ya no es el panel del campus
+    assert c.get("/campus").status_code == 200 and "Cómo está el campus hoy" in c.get("/campus").text
+    login(c)
+    r = c.get("/")
+    assert r.status_code == 302 and r.headers["location"] == "/me"   # con sesión, la portada lleva a su panel
+
+
+def test_root_ignores_forged_oauth_params(engine):
+    c, _ = make_client(engine)
     r = c.get("/", params={"code": "CODE", "state": "forjado"})          # sin cookie de state: se rechaza
     assert r.status_code == 302 and r.headers["location"] == "/login?error=estado"
 
