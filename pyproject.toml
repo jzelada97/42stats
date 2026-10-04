@@ -28,7 +28,7 @@ stats42 = "stats42.cli:app"
 where = ["src"]
 
 [tool.setuptools.package-data]
-stats42 = ["web/*"]
+stats42 = ["web/*", "web_app/*", "web_app/assets/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

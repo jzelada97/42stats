@@ -11,3 +11,5 @@ __pycache__
 .pytest_cache
 REPORT.md
 .env.*
+frontend/node_modules
+src/stats42/web_app

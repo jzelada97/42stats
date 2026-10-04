@@ -70,3 +70,18 @@ escribiendo) de la base del campus y de la de ajustes de usuarios, comprueba su 
 y conserva las 14 más recientes de cada una. En la VM la lanza `deploy/stats42-backup.timer` cada día a las 07:00 y las deja en
 `/var/backups/stats42`. Restaurar: `gunzip -c stats42-AAAAMMDD-HHMMSS.db.gz > stats42.db` con la web y la sincronización paradas.
 Las copias están en el mismo disco que los datos: para protegerse de perder la VM hay que bajarlas a otro sitio de vez en cuando.
+
+## Interfaz
+
+Hay dos interfaces. La **React** (Vite + TypeScript, en `frontend/`) es la principal: tema claro y oscuro (papel y matcha / musgo y
+bambú), con una sola página de entrada que el servidor devuelve en `/`, `/login`, `/me`, `/ayuda` y `/campus`. La **clásica**
+(HTML y JS a mano en `src/stats42/web/`) queda como reserva.
+
+- El servidor usa React si existe `src/stats42/web_app/index.html` (lo genera `npm run build`; no se versiona) y, si no, la clásica.
+  `FT_FRONTEND=classic` fuerza la clásica; `FT_FRONTEND=react` avisa en el log si falta la compilación.
+- El `Dockerfile` compila React en una etapa de Node y copia solo el resultado estático a la imagen final.
+- Desarrollo: `cd frontend && npm install && npm run dev` (proxy a la API en el puerto 8042); `npm test` (Vitest) y `npm run typecheck`.
+- Seguridad: el CSP no admite scripts en línea y el texto de otros alumnos se pinta siempre como texto. `tests/test_frontend_react.py` vigila
+  que el código no use `dangerouslySetInnerHTML` ni `innerHTML`, que cada `href` pase por `safeUrl`/`profileUrl` y que la compilación
+  real sea compatible con el CSP.
+

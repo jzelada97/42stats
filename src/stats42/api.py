@@ -32,7 +32,8 @@ from .db import LoginRecord, User, UserSession, UserSetting, make_engine, make_r
 from .ratelimit import RateLimiter
 
 log = logging.getLogger("stats42.auth")
-WEB_DIR = Path(__file__).parent / "web"
+WEB_DIR = Path(__file__).parent / "web"            # interfaz clásica (HTML y JS a mano)
+APP_DIR = Path(__file__).parent / "web_app"        # interfaz React: la genera `npm run build` en frontend/ (no se versiona)
 PRIVATE_PATHS = {"/", "/api/me", "/api/session", "/me", "/login", "/campus", "/ayuda"}
 # Sin scripts inline ni conexiones a otros sitios; nadie puede enmarcar la web (clickjacking) ni cambiar <base>.
 CSP = ("default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; "
@@ -62,6 +63,8 @@ def create_app(
     app_client: Callable[[], FortyTwoClient] | None = None,
     settings_engine: Engine | None = None,
     require_login: bool | None = None,
+    frontend: str | None = None,
+    app_dir: Path | None = None,
 ) -> FastAPI:
     engine = engine or make_readonly_engine(os.environ.get("FT_DATABASE_URL", "sqlite:///data/stats42.db"))
     cursus_id = cursus_id or int(os.environ.get("FT_CURSUS_ID", "21"))
@@ -69,6 +72,12 @@ def create_app(
     # Por defecto, las estadísticas del campus solo las ve quien se autenticó con 42 (FT_REQUIRE_LOGIN=0 para desarrollo).
     if require_login is None:
         require_login = os.environ.get("FT_REQUIRE_LOGIN", "1").lower() not in ("0", "false", "no")
+    # Interfaz: FT_FRONTEND=classic fuerza la clásica; con "auto" (por defecto) se usa React si está compilada.
+    app_dir = app_dir or APP_DIR
+    mode = (frontend or os.environ.get("FT_FRONTEND", "auto")).lower()
+    use_react = mode != "classic" and (app_dir / "index.html").exists()
+    if mode == "react" and not use_react:
+        log.warning("FT_FRONTEND=react pero no hay compilación en %s: se usa la interfaz clásica", app_dir)
     http = http or httpx.Client(timeout=30, headers={"User-Agent": "stats42/0.1"})
     app_client = app_client or (lambda: FortyTwoClient(cfg.uid, cfg.secret))
     app = FastAPI(title="42stats", docs_url=None, redoc_url=None, openapi_url=None)
@@ -151,6 +160,8 @@ def create_app(
             # Todo lo de /api/ depende de la sesión (y en el campus los ordenadores se comparten): el navegador no guarda
             # nada. El rendimiento lo da la caché del servidor, no la del navegador.
             resp.headers["Cache-Control"] = "no-store"
+        elif path.startswith("/static/assets/"):
+            resp.headers.setdefault("Cache-Control", "public, max-age=31536000, immutable")      # ficheros con hash en el nombre
         elif path.startswith("/static/"):
             resp.headers.setdefault("Cache-Control", "public, max-age=300")
         return resp
@@ -431,17 +442,21 @@ def create_app(
     helpboard.register(app, current_user=current_user, main_engine=engine, settings_db=settings_db,
                        admin_logins=cfg.admin_logins, origin_error=origin_error, cursus_id=cursus_id, abuse=abuse)
 
+    def page(name: str) -> FileResponse:
+        """El mismo index.html para todas las rutas con la interfaz React; un HTML por página con la clásica."""
+        return FileResponse((app_dir / "index.html") if use_react else (WEB_DIR / name), media_type="text/html; charset=utf-8")
+
     @app.get("/login")
     def login_page(request: Request):
         if current_user(request) is not None and not request.query_params.get("error"):
             return RedirectResponse("/me", status_code=302)       # ya has entrado: no hace falta volver a pulsar "Entrar con 42"
-        return FileResponse(WEB_DIR / "login.html", media_type="text/html; charset=utf-8")
+        return page("login.html")
 
     @app.get("/me")
     def me_page(request: Request):
         if current_user(request) is None:
             return RedirectResponse("/login", status_code=302)
-        return FileResponse(WEB_DIR / "me.html", media_type="text/html; charset=utf-8")
+        return page("me.html")
 
     @app.get("/")
     def index(request: Request, code: str | None = None, state: str | None = None, error: str | None = None):
@@ -450,25 +465,25 @@ def create_app(
             return finish_login(request, code, state, error)
         if current_user(request) is not None:
             return RedirectResponse("/me", status_code=302)
-        return FileResponse(WEB_DIR / "login.html", media_type="text/html; charset=utf-8")
+        return page("login.html")
 
     @app.get("/ayuda")
     def ayuda_page(request: Request):
         if current_user(request) is None:
             return RedirectResponse("/login", status_code=302)
-        return FileResponse(WEB_DIR / "ayuda.html", media_type="text/html; charset=utf-8")
+        return page("ayuda.html")
 
     @app.get("/campus")
     def campus_page(request: Request):
         if require_login and current_user(request) is None:
             return RedirectResponse("/login", status_code=302)
-        return FileResponse(WEB_DIR / "index.html", media_type="text/html; charset=utf-8")
+        return page("index.html")
 
     @app.get("/robots.txt")
     def robots() -> Response:
         return Response("User-agent: *\nDisallow: /\n", media_type="text/plain")
 
-    app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
+    app.mount("/static", StaticFiles(directory=app_dir if use_react else WEB_DIR), name="static")
     return app
 
 

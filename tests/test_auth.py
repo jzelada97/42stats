@@ -51,10 +51,10 @@ def fake_42(me=None, token_status=200):
     return httpx.Client(transport=httpx.MockTransport(handler)), seen
 
 
-def make_client(engine, cfg=CFG, settings_engine=None, **kw):
+def make_client(engine, cfg=CFG, settings_engine=None, app_kw=None, **kw):
     http, seen = fake_42(**kw)
     store = settings_engine or create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
-    app = create_app(engine, 21, auth=cfg, http=http, settings_engine=store)
+    app = create_app(engine, 21, auth=cfg, http=http, settings_engine=store, **(app_kw or {}))
     client = TestClient(app, follow_redirects=False, base_url="https://42madrid.example")
     client.settings_engine = store
     return client, seen
