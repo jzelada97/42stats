@@ -24,6 +24,7 @@ from sqlalchemy import func, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
+from . import logins as loginsmod
 from .stats import RANK_RE
 from .db import (AbuseEvent, CursusUser, Quest, QuestUser, HelpRequest, LearningResource, MentorOffer, MentorProject, Project, ProjectUser)
 from .ratelimit import RateLimiter
@@ -303,6 +304,7 @@ def purge(db: Session) -> None:
     db.query(LearningResource).filter(LearningResource.status == "rejected",
                                       LearningResource.created_at < now - RESOURCE_REJECTED_TTL).delete()
     db.query(AbuseEvent).filter(AbuseEvent.last_at < now - ABUSE_TTL).delete()
+    loginsmod.purge(db)
     db.commit()
 
 

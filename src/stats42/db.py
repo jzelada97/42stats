@@ -229,6 +229,17 @@ class AbuseEvent(Base):
     last_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
 
+class LoginRecord(Base):
+    """Quién ha entrado a la web: una fila por alumno (primer y último acceso y cuántos). Sin IP; se purga a los 90 días."""
+
+    __tablename__ = "login_records"
+    user_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    login: Mapped[str] = mapped_column(String(50))
+    first_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    logins: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class UserSession(Base):
     """Sesión abierta con 42. La cookie solo lleva el id: si la fila desaparece (salir, caducar), la cookie deja de valer."""
 
@@ -241,7 +252,8 @@ class UserSession(Base):
 # Tablas de la base escribible de la web (la del campus es de solo lectura para ella).
 def user_data_tables():
     return [UserSetting.__table__, LearningResource.__table__, MentorOffer.__table__, MentorProject.__table__,
-            HelpRequest.__table__, UserSession.__table__, AbuseEvent.__table__]
+            HelpRequest.__table__, UserSession.__table__, AbuseEvent.__table__,
+            LoginRecord.__table__]
 
 
 class SyncState(Base):

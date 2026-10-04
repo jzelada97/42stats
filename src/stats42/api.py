@@ -27,7 +27,8 @@ from . import helpboard
 from . import probe as probemod
 from . import stats
 from .client import FortyTwoClient
-from .db import User, UserSession, UserSetting, make_engine, make_readonly_engine, user_data_tables
+from . import logins as loginsmod
+from .db import LoginRecord, User, UserSession, UserSetting, make_engine, make_readonly_engine, user_data_tables
 from .ratelimit import RateLimiter
 
 log = logging.getLogger("stats42.auth")
@@ -305,6 +306,11 @@ def create_app(
         resp.delete_cookie(authmod.STATE_COOKIE, path="/")
         name = me.get("usual_first_name") or me.get("first_name") or me["login"]
         sid = open_session(me["id"])
+        try:
+            with Session(settings_db()) as db:
+                loginsmod.record_login(db, me["id"], me["login"])
+        except SQLAlchemyError as exc:           # el registro de uso nunca debe impedir entrar
+            log.warning("no se pudo anotar el acceso (%s)", type(exc).__name__)
         # Sin max_age: cookie de sesión, desaparece al cerrar el navegador. La firma caduca a las 12 h y la fila se revoca al salir.
         _cookie(resp, authmod.SESSION_COOKIE, authmod.sign(cfg, "session", {"uid": me["id"], "login": me["login"], "name": name, "sid": sid}),
                 None)
@@ -382,6 +388,14 @@ def create_app(
         return {"deadline": body.deadline.isoformat() if body.deadline else None,
                 "freeze_until": body.freeze_until.isoformat() if body.freeze_until else None}
 
+    @app.get("/api/admin/logins")
+    def admin_logins(request: Request):
+        u = current_user(request)
+        if u is None or u["login"] not in cfg.admin_logins:
+            return JSONResponse({"detail": "No autorizado."}, status_code=403 if u else 401)
+        with Session(settings_db()) as db:
+            return loginsmod.summary(db)
+
     @app.post("/api/me/delete")
     def delete_my_data(request: Request):
         """Borra todo lo que esta web guarda de ti (ajustes, mentoría, peticiones, envíos) y cierra tu sesión."""
@@ -392,6 +406,7 @@ def create_app(
             return err
         with Session(settings_db()) as db:
             helpboard.erase_user(db, u["uid"])
+            db.query(LoginRecord).filter(LoginRecord.user_id == u["uid"]).delete()
             db.query(UserSetting).filter(UserSetting.user_id == u["uid"]).delete()
             db.commit()
         close_sessions(uid=u["uid"])

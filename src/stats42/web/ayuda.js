@@ -205,12 +205,27 @@ async function loadPending() {
     ul.append(li);
   }
 }
+const localTime = (iso) => { const d = new Date(iso); return isNaN(d) ? "?" : d.toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" }); };
+
+async function loadLogins() {
+  const d = await api("/api/admin/logins");
+  const box = clear(document.getElementById("login-stats"));
+  for (const [n, label] of [[d.day, "últimas 24 h"], [d.week, "7 días"], [d.month, "30 días"], [d.total, "en total"]]) {
+    box.append(h("div", { class: "tile" }, h("div", { class: "v" }, String(Number(n))), h("div", { class: "l" }, label)));
+  }
+  const ul = clear(document.getElementById("login-list"));
+  if (!d.recent.length) ul.append(h("li", { class: "empty" }, "Todavía no ha entrado nadie desde que existe este registro."));
+  for (const e of d.recent) {
+    ul.append(h("li", {}, h("span", { class: "t mono" }, e.login), h("span", { class: "m" }, "último acceso " + localTime(e.last) + " · " + Number(e.logins) + (e.logins === 1 ? " vez" : " veces"))));
+  }
+}
+
 async function loadAbuse() {
   const d = await api("/api/admin/help/abuse");
   const ul = clear(document.getElementById("abuse-list"));
   if (!d.events.length) ul.append(h("li", { class: "empty" }, "Nadie ha chocado con un límite."));
   for (const e of d.events) {
-    ul.append(h("li", {}, h("span", { class: "t mono" }, e.login), h("span", { class: "m" }, e.kind + " · " + Number(e.hits) + " golpes · último " + String(e.last || "").replace("T", " "))));
+    ul.append(h("li", {}, h("span", { class: "t mono" }, e.login), h("span", { class: "m" }, e.kind + " · " + Number(e.hits) + " golpes · último " + localTime(e.last))));
   }
 }
 /* ---------------------------------------------------------------- arranque */
@@ -225,7 +240,7 @@ async function refresh() {
   }
   renderRequests(o);
   document.getElementById("moderacion").hidden = !o.is_admin;
-  await Promise.all([renderRank(), o.is_admin ? loadPending() : null, o.is_admin ? loadAbuse() : null]);
+  await Promise.all([renderRank(), o.is_admin ? loadPending() : null, o.is_admin ? loadAbuse() : null, o.is_admin ? loadLogins() : null]);
 }
 
 refresh().catch((e) => { document.getElementById("h-ayuda").textContent = `No se pudo cargar la sección de ayuda (${e.message}).`; });

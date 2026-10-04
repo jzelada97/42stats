@@ -46,4 +46,4 @@ class AbuseRecorder:
         rows = db.execute(select(AbuseEvent).order_by(AbuseEvent.last_at.desc()).limit(limit)).scalars().all()
         return [{"login": r.login, "kind": r.kind, "hits": r.hits,
                  "first": r.first_at.date().isoformat() if r.first_at else None,
-                 "last": r.last_at.isoformat(timespec="minutes") if r.last_at else None} for r in rows]
+                 "last": r.last_at.replace(tzinfo=timezone.utc).isoformat(timespec="minutes") if r.last_at else None} for r in rows]
