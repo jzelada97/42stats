@@ -13,7 +13,7 @@ from stats42 import auth as authmod
 from stats42 import probe
 from stats42.api import create_app
 from stats42.client import FortyTwoClient
-from stats42.db import CursusUser, User, init_db
+from stats42.db import CursusUser, User, UserSetting, init_db
 
 CFG = authmod.AuthConfig(uid="the-uid", secret="the-secret", session_secret="session-secret-for-tests",
                          base_url="https://42madrid.example")
@@ -27,6 +27,8 @@ def engine():
         s.add(User(id=12, login="u12", kind="student", pool_year="2025", pool_month="may", active=True, alumni=False, staff=False,
                    correction_point=3))
         s.add(CursusUser(id=1, user_id=12, cursus_id=21, level=3.0))
+        s.add(User(id=13, login="u13", kind="student", pool_year="2025", pool_month="may", active=True, alumni=False, staff=False))
+        s.add(CursusUser(id=2, user_id=13, cursus_id=21, level=2.0))
         s.commit()
     return eng
 
@@ -48,10 +50,13 @@ def fake_42(me=None, token_status=200):
     return httpx.Client(transport=httpx.MockTransport(handler)), seen
 
 
-def make_client(engine, cfg=CFG, **kw):
+def make_client(engine, cfg=CFG, settings_engine=None, **kw):
     http, seen = fake_42(**kw)
-    app = create_app(engine, 21, auth=cfg, http=http)
-    return TestClient(app, follow_redirects=False, base_url="https://42madrid.example"), seen
+    store = settings_engine or create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
+    app = create_app(engine, 21, auth=cfg, http=http, settings_engine=store)
+    client = TestClient(app, follow_redirects=False, base_url="https://42madrid.example")
+    client.settings_engine = store
+    return client, seen
 
 
 def login(client):
@@ -257,3 +262,66 @@ def test_failed_exchange_logs_42s_reason_but_never_the_code_or_secret(engine, ca
     text = " ".join(rec.getMessage() for rec in caplog.records)
     assert "400" in text and "invalid_grant" in text
     assert "CODE" not in text and CFG.secret not in text and "tok-user" not in text
+
+
+# ---------------------------------------------------------------- deadline y freeze indicados por el alumno
+
+from datetime import date, timedelta  # noqa: E402
+
+TODAY = date.today()
+ORIGIN = {"Origin": "https://42madrid.example"}
+
+
+def save(c, **body):
+    return c.post("/api/me/settings", json=body, headers=ORIGIN)
+
+
+def test_saving_settings_requires_a_session(engine):
+    c, _ = make_client(engine)
+    assert save(c, deadline=str(TODAY)).status_code == 401
+
+
+def test_saved_deadline_and_freeze_reach_the_analysis_and_can_be_cleared(engine):
+    c, _ = make_client(engine)
+    login(c)
+    assert save(c, deadline=str(TODAY + timedelta(days=90))).json() == {"deadline": str(TODAY + timedelta(days=90)), "freeze_until": None}
+    me = c.get("/api/me").json()
+    assert me["self_reported"]["days_to_deadline"] == 90 and any(x["key"] == "deadline" for x in me["signals"])
+    save(c, freeze_until=str(TODAY + timedelta(days=20)))
+    assert c.get("/api/me").json()["status"]["key"] == "frozen"
+    assert save(c).status_code == 200                                           # sin fechas = borrar
+    me = c.get("/api/me").json()
+    assert me["self_reported"]["deadline"] is None and me["status"]["key"] != "frozen"
+    with Session(c.settings_engine) as db:
+        assert db.get(UserSetting, 12) is None                                  # no queda una fila vacía
+
+
+def test_settings_only_store_dates_tied_to_the_session_user(engine):
+    c1, _ = make_client(engine)
+    login(c1)
+    save(c1, deadline=str(TODAY + timedelta(days=50)))
+    with Session(c1.settings_engine) as db:
+        row = db.get(UserSetting, 12)
+        assert (row.deadline, row.freeze_until) == (TODAY + timedelta(days=50), None)
+        assert set(UserSetting.__table__.columns.keys()) == {"user_id", "deadline", "freeze_until", "updated_at"}   # sin token ni textos
+    c2, _ = make_client(engine, me={"id": 13, "login": "u13"}, settings_engine=c1.settings_engine)
+    login(c2)
+    assert c2.get("/api/me").json()["self_reported"]["deadline"] is None          # el alumno 13 no ve ni toca lo del 12
+
+
+@pytest.mark.parametrize("body", [
+    {"deadline": "2100-01-01"}, {"deadline": str(TODAY - timedelta(days=400))},
+    {"freeze_until": str(TODAY + timedelta(days=800))}, {"deadline": "no-es-una-fecha"},
+])
+def test_settings_reject_absurd_or_malformed_dates(engine, body):
+    c, _ = make_client(engine)
+    login(c)
+    assert save(c, **body).status_code == 422
+
+
+def test_settings_reject_requests_from_another_origin(engine):
+    c, _ = make_client(engine)
+    login(c)
+    r = c.post("/api/me/settings", json={"deadline": str(TODAY + timedelta(days=30))}, headers={"Origin": "https://evil.example"})
+    assert r.status_code == 403
+    assert c.get("/api/me").json()["self_reported"]["deadline"] is None

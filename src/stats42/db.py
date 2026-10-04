@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, Float, Index, Integer, String, create_engine, event
+from sqlalchemy import JSON, Date, DateTime, Float, Index, Integer, String, create_engine, event
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.engine import Engine
@@ -161,6 +161,16 @@ class QuestUser(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (Index("ix_quest_users_user_quest", "user_id", "quest_id"),)
+
+
+class UserSetting(Base):
+    """Datos que el propio alumno indica (42 no los expone): se guardan en una base aparte, escribible por la web."""
+
+    __tablename__ = "user_settings"
+    user_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    deadline: Mapped[date | None] = mapped_column(Date)
+    freeze_until: Mapped[date | None] = mapped_column(Date)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class SyncState(Base):

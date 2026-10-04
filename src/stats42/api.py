@@ -5,6 +5,7 @@ import logging
 import os
 import time
 from collections.abc import Callable, Iterator
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,7 @@ import httpx
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
@@ -20,7 +22,7 @@ from . import auth as authmod
 from . import probe as probemod
 from . import stats
 from .client import FortyTwoClient
-from .db import User, make_readonly_engine
+from .db import User, UserSetting, make_engine, make_readonly_engine
 
 log = logging.getLogger("stats42.auth")
 WEB_DIR = Path(__file__).parent / "web"
@@ -32,12 +34,18 @@ TTL = {"overview": 60, "levels": 300, "cohorts": 300, "signups": 600, "projects"
        "projects_monthly": 600, "blackholes": 300, "milestones": 600, "attendance": 900, "evaluations": 600, "events": 300, "me_ctx": 600}
 
 
+class SettingsIn(BaseModel):
+    deadline: date | None = None
+    freeze_until: date | None = None
+
+
 def create_app(
     engine: Engine | None = None,
     cursus_id: int | None = None,
     auth: authmod.AuthConfig | None = None,
     http: httpx.Client | None = None,
     app_client: Callable[[], FortyTwoClient] | None = None,
+    settings_engine: Engine | None = None,
 ) -> FastAPI:
     engine = engine or make_readonly_engine(os.environ.get("FT_DATABASE_URL", "sqlite:///data/stats42.db"))
     cursus_id = cursus_id or int(os.environ.get("FT_CURSUS_ID", "21"))
@@ -46,6 +54,15 @@ def create_app(
     app_client = app_client or (lambda: FortyTwoClient(cfg.uid, cfg.secret))
     app = FastAPI(title="42stats", docs_url=None, redoc_url=None, openapi_url=None)
     cache: dict[str, tuple[float, Any]] = {}
+    store: dict[str, Engine] = {}
+
+    def settings_db() -> Engine:
+        """Base aparte (escribible) con lo que indica cada alumno; se crea al primer uso."""
+        if "e" not in store:
+            e = settings_engine or make_engine(os.environ.get("FT_SETTINGS_DATABASE_URL", "sqlite:///data/user_settings.db"))
+            UserSetting.__table__.create(e, checkfirst=True)
+            store["e"] = e
+        return store["e"]
 
     def cached(key: str, compute: Callable[[], Any]) -> Any:
         hit = cache.get(key)
@@ -205,10 +222,39 @@ def create_app(
         if u is None:
             return JSONResponse({"detail": "Inicia sesión con 42 para ver tu panel."}, status_code=401)
         ctx = cached("me_ctx", lambda: stats.cohort_context(s, cursus_id))
-        data = stats.me(s, u["uid"], ctx, cursus_id)
+        with Session(settings_db()) as db:
+            row = db.get(UserSetting, u["uid"])
+            mine = {"deadline": row.deadline, "freeze_until": row.freeze_until} if row else {}
+        data = stats.me(s, u["uid"], ctx, cursus_id, settings=mine)
         if data is None:
             return JSONResponse({"detail": "No tenemos datos de tu cuenta todavía."}, status_code=404)
         return data
+
+    @app.post("/api/me/settings")
+    def save_settings(body: SettingsIn, request: Request):
+        u = current_user(request)
+        if u is None:
+            return JSONResponse({"detail": "Inicia sesión con 42."}, status_code=401)
+        origin = request.headers.get("origin")
+        if origin and cfg.base_url and origin.rstrip("/") != cfg.base_url:   # defensa extra contra peticiones de otros sitios
+            return JSONResponse({"detail": "Origen no permitido."}, status_code=403)
+        today = datetime.now(timezone.utc).date()
+        if body.deadline is not None and not (today - timedelta(days=60) <= body.deadline <= today + timedelta(days=800)):
+            return JSONResponse({"detail": "El deadline debe estar entre hace 60 días y 800 días desde hoy."}, status_code=422)
+        if body.freeze_until is not None and not (today - timedelta(days=365) <= body.freeze_until <= today + timedelta(days=365)):
+            return JSONResponse({"detail": "El freeze debe estar a menos de un año de hoy."}, status_code=422)
+        with Session(settings_db()) as db:
+            row = db.get(UserSetting, u["uid"])
+            if body.deadline is None and body.freeze_until is None:     # borrar: no se conserva una fila vacía
+                if row:
+                    db.delete(row)
+            else:
+                row = row or UserSetting(user_id=u["uid"])
+                row.deadline, row.freeze_until, row.updated_at = body.deadline, body.freeze_until, datetime.now(timezone.utc)
+                db.add(row)
+            db.commit()
+        return {"deadline": body.deadline.isoformat() if body.deadline else None,
+                "freeze_until": body.freeze_until.isoformat() if body.freeze_until else None}
 
     @app.get("/login")
     def login_page() -> FileResponse:

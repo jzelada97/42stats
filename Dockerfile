@@ -12,7 +12,8 @@ RUN pip install .
 # Usuario sin privilegios y volumen para la base de datos SQLite
 RUN useradd --system --uid 1000 app && mkdir /data && chown app /data
 USER app
-ENV FT_DATABASE_URL=sqlite:////data/stats42.db
+ENV FT_DATABASE_URL=sqlite:////data/stats42.db \
+    FT_SETTINGS_DATABASE_URL=sqlite:////data/user_settings.db
 VOLUME /data
 
 ENTRYPOINT ["stats42"]

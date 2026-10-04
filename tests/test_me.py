@@ -93,3 +93,49 @@ def test_unknown_user_returns_none(engine):
 def test_analysis_contains_only_the_users_own_identity(engine):
     blob = str(analyse(engine, 12))
     assert "u12" in blob and "u11" not in blob and "u1'" not in blob
+
+
+# ---------------------------------------------------------------- freeze y deadline indicados por el alumno
+
+def analyse_with(engine, uid, settings):
+    with Session(engine) as s:
+        ctx = stats.cohort_context(s, 21, NOW)
+        return stats.me(s, uid, ctx, 21, NOW, settings=settings)
+
+
+def day(n):
+    return NOW.date() + timedelta(days=n)
+
+
+def test_active_freeze_pauses_activity_and_milestone_alerts(engine):
+    a = analyse_with(engine, 1, {"freeze_until": day(10)})
+    assert a["status"]["key"] == "frozen" and "freeze" in a["status"]["label"].lower()
+    states = {x["key"]: x["state"] for x in a["signals"]}
+    assert states["activity"] == "ok" and states["milestone"] != "warn"
+    assert not any("sesión corta" in t or "sin validar un milestone" in t for t in a["tips"])
+    assert a["self_reported"]["frozen"] is True and a["self_reported"]["freeze_until"] == day(10).isoformat()
+
+
+def test_expired_freeze_has_no_effect(engine):
+    a = analyse_with(engine, 1, {"freeze_until": day(-1)})
+    assert a["status"]["key"] == "attention" and a["self_reported"]["frozen"] is False
+
+
+@pytest.mark.parametrize("offset,state", [(20, "warn"), (60, "ok"), (100, "good"), (-5, "warn")])
+def test_deadline_signal_compares_days_left_with_the_usual_time_for_the_next_step(engine, offset, state):
+    a = analyse_with(engine, 6, {"deadline": day(offset)})     # el alumno 6 va hacia el Rank 01: lo habitual son 70 días
+    sig = next(x for x in a["signals"] if x["key"] == "deadline")
+    assert sig["state"] == state and sig["value"] == f"{offset} días" and "indicado por ti" in sig["detail"]
+    assert a["self_reported"]["days_to_deadline"] == offset
+    assert (len(a["tips"]) > len(analyse_with(engine, 6, {})["tips"])) == (state == "warn")
+
+
+def test_no_settings_means_no_deadline_signal_and_nothing_reported(engine):
+    a = analyse_with(engine, 6, None)
+    assert not any(x["key"] == "deadline" for x in a["signals"])
+    assert a["self_reported"] == {"deadline": None, "freeze_until": None, "frozen": False, "days_to_deadline": None}
+
+
+def test_deadline_during_freeze_is_paused_not_alarming(engine):
+    a = analyse_with(engine, 6, {"deadline": day(5), "freeze_until": day(30)})
+    assert next(x for x in a["signals"] if x["key"] == "deadline")["state"] == "ok"

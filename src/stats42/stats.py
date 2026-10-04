@@ -629,7 +629,8 @@ def _sig(key: str, label: str, state: str, value: str, detail: str) -> dict:
     return {"key": key, "label": label, "state": state, "value": value, "detail": detail}
 
 
-def me(s: Session, user_id: int, ctx: dict, cursus_id: int = 21, now: datetime | None = None) -> dict | None:
+def me(s: Session, user_id: int, ctx: dict, cursus_id: int = 21, now: datetime | None = None,
+       settings: dict | None = None) -> dict | None:
     """Análisis de UN alumno (solo se sirve a su propio usuario). Reglas transparentes, sin modelo."""
     now = now or _now()
     user = s.get(User, user_id)
@@ -641,6 +642,10 @@ def me(s: Session, user_id: int, ctx: dict, cursus_id: int = 21, now: datetime |
     begin = _aware(cu.begin_at) if cu else None
     signals: list[dict] = []
     tips: list[str] = []
+    settings = settings or {}
+    freeze_until = settings.get("freeze_until")      # dato indicado por el alumno, no viene de 42
+    deadline = settings.get("deadline")
+    frozen = in_cursus and freeze_until is not None and freeze_until >= now.date()
 
     # ---- actividad (sesiones de los últimos 84 días y última conexión)
     monday = (now - timedelta(days=now.weekday())).date()
@@ -657,7 +662,9 @@ def me(s: Session, user_id: int, ctx: dict, cursus_id: int = 21, now: datetime |
     since_last = (now - last).days if last else None
     hours30 = ctx["hours_by_user"].get(user_id, 0.0)
     pct_h = _percentile(ctx["hours"], hours30) if in_cursus else None
-    if since_last is None or since_last > 21:
+    if frozen:
+        a_state, a_detail = "ok", f"En freeze hasta {freeze_until.isoformat()}: no se evalúa la actividad."
+    elif since_last is None or since_last > 21:
         a_state = "warn"
         a_detail = "No constan sesiones recientes en el campus." if since_last is None else f"Llevas {since_last} días sin conectarte."
         tips.append("Planifica una sesión corta esta semana: volver a un ritmo regular pesa más que esperar a un bloque largo.")
@@ -722,12 +729,34 @@ def me(s: Session, user_id: int, ctx: dict, cursus_id: int = 21, now: datetime |
                 state = "ok"
             else:
                 state = "good" if days <= typical else "ok" if days <= typical * 1.5 else "warn"
+            if frozen and state == "warn":
+                state = "ok"                       # en freeze no se marca un milestone como atrasado
             next_ms = {"label": f"Rank {nxt:02d}", "days_since_last": days, "typical_days": typical}
             detail = (f"Llevas {days} días desde tu último hito; lo habitual hasta el siguiente son {typical:.0f}."
                       if days is not None and typical is not None else "No hay datos suficientes para comparar el siguiente hito.")
             signals.append(_sig("milestone", "Siguiente milestone", state, f"Rank {nxt:02d}", detail))
             if state == "warn":
                 tips.append(f"Llevas {days} días sin validar un milestone y lo habitual son {typical:.0f}. Identifica qué proyecto te frena y pide ayuda a alguien que ya lo tenga.")
+
+    # ---- deadline indicado por el alumno
+    days_left = (deadline - now.date()).days if deadline is not None else None
+    if in_cursus and days_left is not None:
+        typical = next_ms["typical_days"] if next_ms else None
+        if frozen:
+            d_state, d_detail = "ok", "Estás en freeze: tu deadline queda en pausa."
+        elif days_left < 0:
+            d_state, d_detail = "warn", f"El deadline que indicaste pasó hace {-days_left} días. Actualízalo si cambió."
+            tips.append("Tu deadline indicado ya pasó. Si 42 te lo movió, actualízalo aquí para que el análisis sea fiable.")
+        elif typical is None:
+            d_state, d_detail = "ok", f"Te quedan {days_left} días hasta tu deadline."
+        elif days_left >= typical:
+            d_state, d_detail = "good", f"Te quedan {days_left} días y lo habitual para el siguiente paso son {typical:.0f}."
+        elif days_left >= typical * 0.5:
+            d_state, d_detail = "ok", f"Te quedan {days_left} días; lo habitual para el siguiente paso son {typical:.0f}. Vas justo."
+        else:
+            d_state, d_detail = "warn", f"Te quedan {days_left} días y lo habitual para el siguiente paso son {typical:.0f}."
+            tips.append(f"Te quedan {days_left} días hasta tu deadline y el siguiente milestone suele llevar {typical:.0f}. Prioriza ese proyecto esta semana.")
+        signals.append(_sig("deadline", "Tu deadline", d_state, f"{days_left} días", d_detail + " (dato indicado por ti)"))
 
     # ---- evaluaciones y proyectos
     evals90 = s.scalar(select(func.count()).select_from(Evaluation).where(
@@ -762,6 +791,8 @@ def me(s: Session, user_id: int, ctx: dict, cursus_id: int = 21, now: datetime |
     goods = sum(1 for x in signals if x["state"] == "good")
     if not in_cursus:
         status = {"key": "none", "label": "Sin cursus abierto", "summary": "No tienes el 42cursus abierto: te mostramos tu actividad."}
+    elif frozen:
+        status = {"key": "frozen", "label": "En freeze", "summary": f"Indicaste un freeze hasta {freeze_until.isoformat()}: no marcamos alertas de actividad ni de milestones."}
     elif warns >= 2:
         status = {"key": "attention", "label": "Necesita atención", "summary": "Varias señales por debajo de la media de tu cursus. Mira los consejos."}
     elif warns == 1:
@@ -790,4 +821,7 @@ def me(s: Session, user_id: int, ctx: dict, cursus_id: int = 21, now: datetime |
                      "weekly": [{"week": w.isoformat(), "hours": round(h, 1)} for w, h in weekly.items()]},
         "projects": {"validated_90d": validated90, "in_progress": ongoing[:8]},
         "evaluations": {"done_90d": evals90, "correction_points": points},
+        "self_reported": {"deadline": deadline.isoformat() if deadline else None,
+                          "freeze_until": freeze_until.isoformat() if freeze_until else None,
+                          "frozen": bool(frozen), "days_to_deadline": days_left},
     }
