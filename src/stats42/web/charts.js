@@ -188,7 +188,10 @@ const waiting = "Aún no hay datos: la carga inicial sigue en curso.";
 const safeUrl = (u) => {
   try {
     const x = new URL(u);
-    return x.protocol === "https:" && !x.username && !x.password ? x.href : "";
+    // Nada de IPs (127.1, 0x7f.1...), IPv6 ni hosts sin letras en el último tramo: no son dominios de nadie.
+    const host = x.hostname;
+    if (x.protocol !== "https:" || x.username || x.password || host.includes(":") || !/\.([a-z]{2,63}|xn--[a-z0-9-]+)$/i.test(host)) return "";
+    return x.href;
   } catch (_) { return ""; }
 };
 const LOGIN_RE = /^[a-z0-9][a-z0-9_-]{1,29}$/i;

@@ -237,7 +237,7 @@ fieldset.checks { border: 1px solid var(--grid); border-radius: 8px; padding: 10
 .list.res li { grid-template-columns: auto 1fr auto; align-items: start; }
 .list.mentors li { grid-template-columns: 110px 1fr; }
 .list.requests li { grid-template-columns: 1fr auto; align-items: start; }
-.list .note { margin: 4px 0 0; font-size: 13px; color: var(--ink); overflow-wrap: anywhere; }
+.list .note { margin: 4px 0 0; font-size: 13px; color: var(--ink); overflow-wrap: anywhere; overflow: hidden; max-height: 7em; }
 .list li > div, .list .t { min-width: 0; overflow-wrap: anywhere; }
 .cta { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
 .proj .m a { color: var(--accent-ink); }

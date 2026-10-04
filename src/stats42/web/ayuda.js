@@ -69,6 +69,7 @@ document.getElementById("res-form").addEventListener("submit", async (e) => {
     setMsg("rf-msg", "Enviado: lo revisaremos antes de publicarlo.");
     document.getElementById("rf-title").value = ""; document.getElementById("rf-url").value = ""; document.getElementById("rf-confirm").checked = false;
     await loadResources();
+    if (state.overview && state.overview.is_admin) await loadPending();
   } catch (err) { setMsg("rf-msg", err.message); }
 });
 
@@ -149,13 +150,16 @@ document.getElementById("req-form").addEventListener("submit", async (e) => {
 });
 
 /* ---------------------------------------------------------------- moderación */
+/* El admin decide mirando el dominio real que abriría el navegador, no la cadena tal cual se escribió. */
+const hostOf = (u) => { try { return new URL(u).hostname; } catch (_) { return "?"; } };
+
 async function loadPending() {
   const d = await api("/api/admin/help/pending");
   const ul = clear(document.getElementById("pending-list"));
   if (!d.resources.length) ul.append(h("li", { class: "empty" }, "No hay nada pendiente."));
   for (const r of d.resources) {
     const li = h("li", {}, h("span", { class: "chip-kind" }, r.kind),
-      h("div", {}, h("a", { href: r.url, external: "1", class: "t" }, r.title), h("div", { class: "m" }, `${r.project} · enviado por ${r.by}`), h("div", { class: "m mono" }, r.url)));
+      h("div", {}, h("a", { href: r.url, external: "1", class: "t" }, r.title), h("div", { class: "m" }, `${r.project} · enviado por ${r.by}`), h("div", { class: "m mono" }, "destino: " + hostOf(r.url) + " · " + r.url)));
     for (const [action, label] of [["approve", "Aprobar"], ["reject", "Rechazar"]]) {
       const b = h("button", { class: action === "approve" ? "btn small" : "btn small ghost", type: "button" }, label);
       b.addEventListener("click", async () => { try { await api(`/api/admin/help/resources/${Number(r.id)}/${action}`, {}); await loadPending(); await loadResources(); } catch (e) { setMsg("mod-msg", e.message); } });

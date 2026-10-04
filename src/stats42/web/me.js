@@ -113,4 +113,13 @@ document.getElementById("self-form").addEventListener("submit", (e) => {
   saveSelf(document.getElementById("deadline").value, document.getElementById("freeze").value);
 });
 document.getElementById("self-clear").addEventListener("click", () => saveSelf("", ""));
+document.getElementById("erase").addEventListener("click", async () => {
+  if (!confirm("Se borrará todo lo que guardamos de ti en esta web y se cerrará tu sesión. ¿Seguro?")) return;
+  const msg = document.getElementById("erase-msg");
+  try {
+    const r = await fetch("/api/me/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    if (!r.ok) throw new Error(`error ${r.status}`);
+    location.replace("/");
+  } catch (e) { msg.textContent = `No se pudo borrar: ${e.message}`; }
+});
 loadMe();

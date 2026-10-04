@@ -67,4 +67,4 @@ def test_user_generated_pages_never_use_innerhtml_and_only_assign_validated_link
             if re.search(r"\.href\s*=", line):
                 assert any(ok in line for ok in ("safeUrl(", "profileUrl(", 'u)', '"/', "`/")), f"{f.name}:{n}: href sin validar: {line.strip()}"
     helpers = (WEB / "charts.js").read_text(encoding="utf-8")
-    assert 'x.protocol === "https:"' in helpers and "x.username" in helpers                  # safeUrl exige https y rechaza credenciales
+    assert 'x.protocol !== "https:"' in helpers and "x.username" in helpers and 'host.includes(":")' in helpers   # safeUrl exige https, sin credenciales ni IPs
