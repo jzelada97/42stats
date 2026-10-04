@@ -32,7 +32,7 @@ def engine():
         for pid in (1, 2, 3):                      # actividad de relleno para que cada proyecto salga en los desplegables
             for _ in range(25):
                 k += 1
-                s.add(ProjectUser(id=k, user_id=99, project_id=pid, status="finished", validated=False, final_mark=40))
+                s.add(ProjectUser(id=k, user_id=99, project_id=pid, status="finished", validated=False, final_mark=40, cursus_ids=[21]))
         def validated(uid, pid, mark, days_ago):
             nonlocal k
             k += 1

@@ -57,7 +57,8 @@ function renderMe(d) {
     <h3 class="mt">En curso ahora</h3>
     ${p.in_progress.length ? `<ul class="list plain">${p.in_progress.map((x) => `<li class="proj"><div><span class="t">${esc(x.name)}</span> <span class="m">${x.days == null ? "" : `desde hace ${fmt(x.days)} días`}</span>`
         + (x.context ? `<div class="m">Lo habitual: validarlo en ${x.context.median_days == null ? "–" : fmt1(x.context.median_days)} días · lo valida el ${pct(x.context.validation_rate)} · nota media ${fmt1(x.context.avg_mark)}</div>` : "")
-        + `<div class="m"><a href="/ayuda?project=${Number(x.id)}#recursos">${fmt(x.resources)} recursos</a> · <a href="/ayuda?project=${Number(x.id)}#mentoria">${fmt(x.mentors)} mentores</a> · <a href="/ayuda?project=${Number(x.id)}#pedir">Pedir ayuda</a></div></div></li>`).join("")}</ul>`
+        + (x.help ? `<div class="m"><a href="/ayuda?project=${Number(x.id)}#recursos">${fmt(x.resources)} recursos</a> · <a href="/ayuda?project=${Number(x.id)}#mentoria">${fmt(x.mentors)} mentores</a> · <a href="/ayuda?project=${Number(x.id)}#pedir">Pedir ayuda</a></div>` : "")
+        + `</div></li>`).join("")}</ul>`
       : `<p class="sub">No tienes proyectos en curso.</p>`}`;
 
   renderHabits(d.habits);

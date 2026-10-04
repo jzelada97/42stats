@@ -340,8 +340,10 @@ def create_app(
             return JSONResponse({"detail": "No tenemos datos de tu cuenta todavía."}, status_code=404)
         with Session(settings_db()) as db:                 # ayuda disponible para cada proyecto en curso
             counts = helpboard.project_help_counts(db, s, [p["id"] for p in data["projects"]["in_progress"]], u["uid"], cursus_id)
+        in_help = {o["id"] for o in app.state.help_options(s)}
         for p in data["projects"]["in_progress"]:
             p.update(counts.get(p["id"], {"mentors": 0, "resources": 0}))
+            p["help"] = p["id"] in in_help        # solo el 42cursus tiene sección de ayuda
         return data
 
     def origin_error(request: Request):

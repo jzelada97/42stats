@@ -244,6 +244,7 @@ fieldset.checks { border: 1px solid var(--grid); border-radius: 8px; padding: 10
 @media (max-width: 760px) { .list.res li { grid-template-columns: 1fr; } .list.mentors li { grid-template-columns: 1fr; } .list.requests li { grid-template-columns: 1fr; } }
 
 /* ---- selector de cursus ---- */
+.cursus-bar[hidden] { display: none; }
 .cursus-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 4px 0; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; }
 .chip-btn { font: 600 13px var(--sans); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--axis); background: var(--surface); color: var(--ink); cursor: pointer; }

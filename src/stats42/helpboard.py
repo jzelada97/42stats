@@ -140,9 +140,10 @@ class RequestIn(BaseModel):
 
 # ---------------------------------------------------------------- consultas
 
-def project_options(ms: Session) -> list[dict]:
+def project_options(ms: Session, cursus_id: int | None = None) -> list[dict]:
     """Proyectos con actividad real, cada uno en SU cursus: el más habitual entre los intentos de los alumnos de Madrid.
 
+    Con `cursus_id` solo quedan los de ese cursus (la ayuda se limita al 42cursus: piscinas y cursus obsoletos fuera).
     El orden dentro de un cursus sigue la dificultad (que es más o menos el orden del currículo) y luego el nombre.
     """
     rows = ms.execute(
@@ -154,6 +155,8 @@ def project_options(ms: Session) -> list[dict]:
         if pid in ids and cids:
             seen.setdefault(pid, Counter()).update(cids)
     primary = {pid: min(c.items(), key=lambda kv: (-kv[1], kv[0]))[0] for pid, c in seen.items()}
+    if cursus_id is not None:
+        rows = [r for r in rows if primary.get(r[0]) == cursus_id]
     rows.sort(key=lambda r: (r[2] is None, r[2] or 0, r[1].lower()))
     return [{"id": i, "name": n, "cursus_id": primary.get(i)} for i, n, _ in rows]
 
@@ -285,9 +288,11 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
         hit = cache.get("options")
         if hit and time.monotonic() - hit[0] < 600:
             return hit[1]
-        value = project_options(ms)
+        value = project_options(ms, cursus_id)
         cache["options"] = (time.monotonic(), value)
         return value
+
+    app.state.help_options = options          # lo usa el panel para saber en qué proyectos hay sección de ayuda
 
     def unauth():
         return JSONResponse({"detail": "Inicia sesión con 42."}, status_code=401)

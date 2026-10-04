@@ -42,6 +42,7 @@ const inCursus = (p) => p.cursus_id === state.cursus;
 const projectsHere = () => state.overview.projects.filter(inCursus);
 
 function renderChips() {
+  document.querySelector(".cursus-bar").hidden = state.overview.cursus.length <= 1;      // con un solo cursus no hay nada que elegir
   const box = clear(document.getElementById("cursus-chips"));
   for (const c of state.overview.cursus) {
     const on = c.id === state.cursus;
