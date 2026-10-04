@@ -22,6 +22,7 @@ from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from . import auth as authmod
+from .abuse import AbuseRecorder
 from . import helpboard
 from . import probe as probemod
 from . import stats
@@ -78,6 +79,7 @@ def create_app(
     exchange_limiter = RateLimiter(40, 60)    # global: canjes de código con 42 (cada uno son 2 llamadas)
     settings_limiter = RateLimiter(20, 60)    # por alumno: guardados de deadline y freeze
     me_limiter = RateLimiter(60, 60)          # por alumno: lecturas de /api/me (consulta mucho más que el resto)
+    abuse = AbuseRecorder(lambda: settings_db())
     used_states: dict[str, float] = {}        # un intento por state: repetir un callback no vuelve a llamar a 42
     key_locks: dict[str, threading.Lock] = {}
 
@@ -280,6 +282,7 @@ def create_app(
             return _fail("estado")
         used_states[state] = now
         if not exchange_limiter.allow("42"):
+            log.warning("límite global de canjes con 42 alcanzado")
             return _fail("limite")
         try:
             token = authmod.exchange_code(cfg, code, http)
@@ -326,6 +329,7 @@ def create_app(
         if u is None:
             return JSONResponse({"detail": "Inicia sesión con 42 para ver tu panel."}, status_code=401)
         if not me_limiter.allow(str(u["uid"])):
+            abuse.note(u["uid"], u["login"], "lectura-me")
             return JSONResponse({"detail": "Demasiadas consultas seguidas. Espera un minuto."}, status_code=429, headers={"Retry-After": "60"})
         ctx = cached("me_ctx", lambda: stats.cohort_context(s, cursus_id))
         with Session(settings_db()) as db:
@@ -353,6 +357,7 @@ def create_app(
         if u is None:
             return JSONResponse({"detail": "Inicia sesión con 42."}, status_code=401)
         if not settings_limiter.allow(str(u["uid"])):
+            abuse.note(u["uid"], u["login"], "ajustes")
             return JSONResponse({"detail": "Demasiados cambios seguidos. Espera un minuto."}, status_code=429,
                                 headers={"Retry-After": "60"})
         if (err := origin_error(request)) is not None:
@@ -393,7 +398,7 @@ def create_app(
         return resp
 
     helpboard.register(app, current_user=current_user, main_engine=engine, settings_db=settings_db,
-                       admin_logins=cfg.admin_logins, origin_error=origin_error, cursus_id=cursus_id)
+                       admin_logins=cfg.admin_logins, origin_error=origin_error, cursus_id=cursus_id, abuse=abuse)
 
     @app.get("/login")
     def login_page() -> FileResponse:

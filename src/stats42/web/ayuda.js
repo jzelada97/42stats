@@ -168,6 +168,14 @@ async function loadPending() {
     ul.append(li);
   }
 }
+async function loadAbuse() {
+  const d = await api("/api/admin/help/abuse");
+  const ul = clear(document.getElementById("abuse-list"));
+  if (!d.events.length) ul.append(h("li", { class: "empty" }, "Nadie ha chocado con un límite."));
+  for (const e of d.events) {
+    ul.append(h("li", {}, h("span", { class: "t mono" }, e.login), h("span", { class: "m" }, e.kind + " · " + Number(e.hits) + " golpes · último " + String(e.last || "").replace("T", " "))));
+  }
+}
 /* ---------------------------------------------------------------- arranque */
 async function refresh() {
   const o = await api("/api/help/overview");
@@ -181,7 +189,7 @@ async function refresh() {
   renderOffer(o);
   renderRequests(o);
   document.getElementById("moderacion").hidden = !o.is_admin;
-  await Promise.all([loadResources(), loadMentors(), o.is_admin ? loadPending() : null]);
+  await Promise.all([loadResources(), loadMentors(), o.is_admin ? loadPending() : null, o.is_admin ? loadAbuse() : null]);
 }
 
 refresh().catch((e) => { document.getElementById("h-ayuda").textContent = `No se pudo cargar la sección de ayuda (${e.message}).`; });

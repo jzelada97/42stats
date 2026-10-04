@@ -217,6 +217,18 @@ class HelpRequest(Base):
     created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class AbuseEvent(Base):
+    """Quién ha chocado con un límite de ritmo y cuántas veces. Solo uid y login (nunca IP), y se purga a los 30 días."""
+
+    __tablename__ = "abuse_events"
+    user_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    kind: Mapped[str] = mapped_column(String(30), primary_key=True)
+    login: Mapped[str] = mapped_column(String(50))
+    hits: Mapped[int] = mapped_column(Integer, default=0)
+    first_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+
+
 class UserSession(Base):
     """Sesión abierta con 42. La cookie solo lleva el id: si la fila desaparece (salir, caducar), la cookie deja de valer."""
 
@@ -229,7 +241,7 @@ class UserSession(Base):
 # Tablas de la base escribible de la web (la del campus es de solo lectura para ella).
 def user_data_tables():
     return [UserSetting.__table__, LearningResource.__table__, MentorOffer.__table__, MentorProject.__table__,
-            HelpRequest.__table__, UserSession.__table__]
+            HelpRequest.__table__, UserSession.__table__, AbuseEvent.__table__]
 
 
 class SyncState(Base):

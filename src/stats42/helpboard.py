@@ -23,7 +23,7 @@ from sqlalchemy import func, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
-from .db import (CursusUser, HelpRequest, LearningResource, MentorOffer, MentorProject, Project, ProjectUser)
+from .db import (AbuseEvent, CursusUser, HelpRequest, LearningResource, MentorOffer, MentorProject, Project, ProjectUser)
 from .ratelimit import RateLimiter
 
 KINDS = ("guía", "vídeo", "documentación", "herramienta", "otro")
@@ -226,6 +226,7 @@ def incoming_requests(db: Session, ms: Session, uid: int, cursus_id: int, limit:
 # ---------------------------------------------------------------- retención y borrado
 
 RESOURCE_REJECTED_TTL = timedelta(days=30)
+ABUSE_TTL = timedelta(days=30)
 
 
 def purge(db: Session) -> None:
@@ -234,12 +235,14 @@ def purge(db: Session) -> None:
     db.query(HelpRequest).filter((HelpRequest.created_at < now - REQUEST_TTL) | (HelpRequest.status != "open")).delete()
     db.query(LearningResource).filter(LearningResource.status == "rejected",
                                       LearningResource.created_at < now - RESOURCE_REJECTED_TTL).delete()
+    db.query(AbuseEvent).filter(AbuseEvent.last_at < now - ABUSE_TTL).delete()
     db.commit()
 
 
 def erase_user(db: Session, uid: int) -> None:
     """Todo lo que la ayuda guarda de un alumno. Los recursos ya aprobados se quedan, pero sin su nombre."""
     db.query(HelpRequest).filter(HelpRequest.user_id == uid).delete()
+    db.query(AbuseEvent).filter(AbuseEvent.user_id == uid).delete()
     db.query(MentorProject).filter(MentorProject.user_id == uid).delete()
     db.query(MentorOffer).filter(MentorOffer.user_id == uid).delete()
     db.query(LearningResource).filter(LearningResource.submitted_by == uid, LearningResource.status != "approved").delete()
@@ -248,7 +251,8 @@ def erase_user(db: Session, uid: int) -> None:
 
 # ---------------------------------------------------------------- rutas
 
-def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, admin_logins, origin_error, cursus_id: int = 21):
+def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, admin_logins, origin_error, cursus_id: int = 21,
+             abuse=None):
     limits = {"read": RateLimiter(120, 60), "resource": RateLimiter(5, 3600), "offer": RateLimiter(20, 3600), "request": RateLimiter(10, 3600),
               "admin": RateLimiter(240, 60), "attempt": RateLimiter(60, 3600)}
     cache: dict = {}
@@ -270,6 +274,8 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
         if u is None:
             raise HTTPException(status_code=401, detail="Inicia sesión con 42.")
         if not limits["read"].allow(str(u["uid"])):
+            if abuse is not None:
+                abuse.note(u["uid"], u["login"], "lectura-ayuda")
             raise HTTPException(status_code=429, detail="Demasiadas consultas seguidas. Espera un minuto.", headers={"Retry-After": "60"})
 
     guard = [Depends(require_user)]
@@ -277,7 +283,9 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
     def bad(msg: str, status: int = 422):
         return JSONResponse({"detail": msg}, status_code=status)
 
-    def too_many():
+    def too_many(u: dict, kind: str):
+        if abuse is not None:
+            abuse.note(u["uid"], u["login"], kind)
         return JSONResponse({"detail": "Demasiadas acciones seguidas. Espera un poco."}, status_code=429, headers={"Retry-After": "60"})
 
     def is_admin(u: dict) -> bool:
@@ -345,7 +353,7 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
         if (err := origin_error(request)) is not None:
             return err
         if not limits["attempt"].allow(str(u["uid"])):
-            return too_many()
+            return too_many(u, "ayuda-intentos")
         if not body.confirm_no_solution:
             return bad("Confirma que el recurso explica el tema y no contiene la solución del proyecto.")
         try:
@@ -359,7 +367,7 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
             if db.execute(select(LearningResource.id).where(LearningResource.url == url, LearningResource.status != "rejected")).first():
                 return bad("Ese enlace ya está en la lista o pendiente de revisión.")
             if not limits["resource"].allow(str(u["uid"])):     # solo cuentan los envíos válidos
-                return too_many()
+                return too_many(u, "ayuda-recursos")
             r = LearningResource(project_id=body.project_id, title=title, url=url, kind=body.kind, submitted_by=u["uid"],
                                  submitted_login=u["login"][:50], status="pending", created_at=utcnow())
             db.add(r)
@@ -374,7 +382,7 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
         if (err := origin_error(request)) is not None:
             return err
         if not limits["attempt"].allow(str(u["uid"])):
-            return too_many()
+            return too_many(u, "ayuda-intentos")
         try:
             note = clean_text(body.note, min_len=0, max_len=200, field="Nota")
         except ValueError as e:
@@ -390,7 +398,7 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
             if body.active and not ids:
                 return bad("Elige al menos un proyecto para ofrecer ayuda.")
             if not limits["offer"].allow(str(u["uid"])):
-                return too_many()
+                return too_many(u, "ayuda-ofertas")
             offer = db.get(MentorOffer, u["uid"]) or MentorOffer(user_id=u["uid"])
             offer.login, offer.note, offer.active, offer.updated_at = u["login"][:50], note, body.active, utcnow()
             db.add(offer)
@@ -407,7 +415,7 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
         if (err := origin_error(request)) is not None:
             return err
         if not limits["attempt"].allow(str(u["uid"])):
-            return too_many()
+            return too_many(u, "ayuda-intentos")
         try:
             message = clean_text(body.message, min_len=10, max_len=280, field="Mensaje")
         except ValueError as e:
@@ -423,7 +431,7 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
             if any(r.project_id == body.project_id for r in open_reqs):
                 return bad("Ya tienes una petición abierta para ese proyecto.")
             if not limits["request"].allow(str(u["uid"])):
-                return too_many()
+                return too_many(u, "ayuda-peticiones")
             r = HelpRequest(user_id=u["uid"], login=u["login"][:50], project_id=body.project_id, message=message,
                             status="open", created_at=utcnow())
             db.add(r)
@@ -457,6 +465,16 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
                               .order_by(LearningResource.created_at).limit(100)).scalars().all()
             return {"resources": [{"id": r.id, "title": r.title, "url": r.url, "kind": r.kind, "by": r.submitted_login,
                                    "project": names.get(r.project_id) if r.project_id else "General"} for r in rows]}
+
+    @app.get("/api/admin/help/abuse", dependencies=guard)
+    def abuse_list(request: Request):
+        u = current_user(request)
+        if u is None or not is_admin(u):
+            return JSONResponse({"detail": "No autorizado."}, status_code=403 if u else 401)
+        if abuse is None:
+            return {"events": []}
+        with Session(settings_db()) as db:
+            return {"events": abuse.recent(db)}
 
     @app.post("/api/admin/help/resources/{resource_id}/{action}", dependencies=guard)
     def review(resource_id: Annotated[int, Path(ge=1, le=MAX_ID)], action: str, request: Request):
