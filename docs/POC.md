@@ -2,29 +2,34 @@
 
 Prueba de concepto basada en los datos reales del campus 42 Madrid (4 de octubre de 2026). Responde a tres preguntas:
 
-1. ¿Cuánta gente abandona o termina blackholeada? (el problema)
+1. ¿Cuánta gente cierra el cursus sin graduarse? (el problema)
 2. ¿Cuándo y con qué progreso? (la oportunidad de actuar)
 3. ¿Qué hace 42 Stats al respecto y cómo comprobaremos si funciona? (la propuesta y cómo medirla)
 
 > Todas las cifras son **agregadas**: no hay ningún alumno concreto. Salen de la base de datos de la sincronización con la API pública de
-> 42, y se pueden regenerar con [`scripts/poc_numbers.py`](../scripts/poc_numbers.py) (ver el final). Las definiciones y sus límites están
-> en el apartado [Cómo se ha medido](#cómo-se-ha-medido-y-qué-no-dicen-los-datos).
+> 42, y se pueden regenerar con [`scripts/poc_numbers.py`](../scripts/poc_numbers.py) (ver el final).
+
+## Una aclaración de vocabulario que cambia la lectura
+
+**En 42 no existe la baja voluntaria.** Quien quiere irse simplemente deja de venir y, al agotarse su plazo, lo blackholean. Por eso este documento
+**no habla de «bajas»**: habla de **cursus cerrados sin graduarse**, que en la práctica son cierres por blackhole.
+
+Lo que **no** podemos confirmar al 100 % es el motivo exacto de cada cierre: la API devuelve la fecha en que se cerró el cursus y una fecha de blackhole
+**orientativa**, pero no dice por qué se cerró. Esa fecha no refleja los plazos por milestone del currículo nuevo ni los freezes. Lo veremos en los datos:
+unos cierran en su fecha, otros semanas antes (plazo de milestone) y otros meses después (freeze). Ninguna de las tres cosas es una baja voluntaria.
 
 ## Resumen
 
-- De **2.561** alumnos que han entrado alguna vez en el 42cursus, solo **934 (36 %)** lo tienen abierto hoy. **1.321 (52 %)** lo cerraron por
-  blackhole (768) o por baja antes de su fecha de blackhole (553). Otros 306 (12 %) lo cerraron de otra forma. Solo se cuentan **alumnos
-  del 42cursus**: ni las cuentas de staff ni quien solo hizo una piscina (ver [a quién se cuenta](#a-quién-se-cuenta)).
-- En las promociones de 2019 a 2023, que ya han tenido tiempo de resolverse, **solo el 26 % de quienes entraron al cursus sigue abierto**:
-  tres de cada cuatro ya no están.
-- **Se quedan atascados al principio y durante mucho tiempo.** Los blackholeados cierran con un nivel mediano de **1,4** tras una mediana de
-  **392 días** (13 meses) en el cursus; el **84 %** no pasó del Rank 01. Hay más de un año para detectar el atasco y ayudar.
-- **La fecha oficial de blackhole no sirve para anticiparse.** En el currículo nuevo los plazos van por milestone y la API no los expone:
-  208 alumnos con el cursus abierto tienen una fecha de blackhole ya pasada, y el alumno no ve cuánto margen real le queda.
-- Hoy, de los 559 alumnos con el cursus abierto a los que aún les quedan ranks, **290 (52 %) llevan más de 90 días sin validar uno** y
-  **118 (21 %) más de 180**.
-- 42 Stats cubre ese hueco con ritmo personal frente a la promoción, señales de atasco, consejos y ayuda entre alumnos. **Lo que no
-  demuestran estos datos es que reduzca el abandono**: eso es una hipótesis que hay que medir (ver [Cómo comprobaremos que funciona](#cómo-comprobaremos-que-funciona)).
+- De **2.561** alumnos que han entrado alguna vez en el 42cursus, **833 (33 %) siguen activos**, **102 (4 %) se han graduado** (son *alumni*) y
+  **1.626 (63 %) cerraron el cursus sin graduarse**. De los 1.728 que ya no están en el programa, **el 94 % salió por cierre y solo el 6 % graduado**.
+- En las promociones de 2019 a 2023, que ya han tenido tiempo de resolverse, **el 74 % cerró sin graduarse**, el 18 % sigue activo y el 8 % se graduó.
+- Cierran **pronto y con poco progreso**: nivel mediano **1,9** tras **361 días** en el cursus; el **80 %** no pasó del Rank 01. Hay cerca de un año para
+  detectar el atasco y ayudar.
+- **La fecha oficial de blackhole no sirve para anticiparse.** El 34 % de los cierres ocurre *antes* de esa fecha (casi siempre entre 2 y 11 semanas), el 19 % meses *después*,
+  y hay 208 alumnos activos con la fecha ya pasada (mediana: 118 días de retraso) que siguen en el programa.
+- Hoy, de los 551 alumnos activos a los que aún les quedan ranks, **282 (51 %) llevan más de 90 días sin validar uno** y **110 (20 %) más de 180**.
+- 42 Stats cubre ese hueco con ritmo personal frente a la promoción, señales de atasco, consejos y ayuda entre alumnos. **Lo que no demuestran estos
+  datos es que reduzca los cierres**: eso es una hipótesis que hay que medir (ver [Cómo comprobaremos que funciona](#cómo-comprobaremos-que-funciona)).
 
 ## 1. El problema: cuánta gente se pierde
 
@@ -32,21 +37,17 @@ Prueba de concepto basada en los datos reales del campus 42 Madrid (4 de octubre
 
 | Situación del cursus | Alumnos | % |
 |---|---:|---:|
-| Abierto hoy | 934 | 36,5 % |
-| Cerrado por blackhole | 768 | 30,0 % |
-| Cerrado por baja antes del blackhole | 553 | 21,6 % |
-| Cerrado de otra forma | 306 | 11,9 % |
+| Activos hoy (cursus abierto, sin graduarse) | 833 | 32,5 % |
+| Graduados (*alumni*) | 102 | 4,0 % |
+| **Cerraron el cursus sin graduarse** | **1.626** | **63,5 %** |
 | **Total que han entrado** | **2.561** | 100 % |
 
 ```mermaid
-pie showData title Estado del 42cursus de los 2.561 alumnos que han entrado
-    "Abierto" : 934
-    "Blackholeado" : 768
-    "Baja antes del blackhole" : 553
-    "Otro cierre" : 306
+pie showData title Situación de los 2.561 alumnos que han entrado al 42cursus
+    "Activos" : 833
+    "Graduados" : 102
+    "Cerraron sin graduarse" : 1626
 ```
-
-De los 1.627 cursus ya cerrados, **el 81 % terminó en blackhole o baja**.
 
 #### A quién se cuenta
 
@@ -58,75 +59,87 @@ en el 42cursus. Quedan fuera:
 | Alumnos con registro en el 42cursus | **2.561** | **Los que se cuentan en este documento** |
 | Alumnos que solo hicieron la C Piscine | 2.082 | Pasaron por la piscina y no han entrado (todavía) al cursus |
 | Alumnos sin ningún intento de proyecto | 111 | Cuentas sin actividad |
-| Otros | 52 | Casos sueltos: la mayoría con intentos en el 42cursus pero **sin registro de cursus** en los datos (no se cuentan), y algunos con intentos solo en cursus antiguos |
-| Cuentas de staff (`admin`) o externas con registro en el 42cursus | 50 | Se excluyen: 26 figuraban como «abiertas» y 24 como «otro cierre»; **ninguna** como blackholeada ni de baja |
+| Otros | 52 | Casos sueltos: la mayoría con intentos en el 42cursus pero **sin registro de cursus** en los datos (no se cuentan) |
+| Cuentas de staff (`admin`) o externas con registro en el 42cursus | 50 | Se excluyen: figuraban como abiertas o como cerradas sin ser alumnos |
 | Cuentas `external` sin registro en el cursus | 3.584 | No son alumnos del campus |
 
 Las piscinas «extra» **no inflan** las cifras: el *Discovery Piscine* y el *Bootcamp Cybersecurity* aparecen en unos 60 alumnos cada uno, y casi todos
-tienen también registro en el 42cursus (los pocos que no, menos de diez, están entre los 52 «otros» que no se cuentan). La C Piscine es la puerta de entrada
-normal, y por eso la columna «Entraron a la piscina» de la tabla de promociones cuenta alumnos que pasaron por ella, no solo los que llegaron al cursus.
-Una limitación: esos 52 casos podrían ser alumnos reales del cursus cuyo registro no está en los datos; son un 2 % y no cambian las conclusiones.
+tienen también registro en el 42cursus. Los **graduados** (*alumni*) conservan el cursus «abierto» en la API, por eso se separan de los activos: ya no
+avanzan ni corre ningún plazo para ellos. Una limitación: esos 52 casos podrían ser alumnos reales del cursus cuyo registro no está en los datos; son un
+2 % y no cambian las conclusiones.
 
 ### Por promoción (año de la piscina)
 
-| Promoción | Entraron a la piscina | Pasaron al cursus | Siguen abiertos | Blackholeados | Baja antes | Siguen / pasaron |
+| Promoción | Entraron a la piscina | Pasaron al cursus | Activos | Graduados | Cerraron sin graduarse | % que cerró |
 |---|---:|---:|---:|---:|---:|---:|
-| 2026 | 636 | 189 | 179 | 1 | 9 | 94,7 % |
-| 2025 | 1.106 | 379 | 227 | 9 | 143 | 59,9 % |
-| 2024 | 1.464 | 698 | 195 | 115 | 338 | 27,9 % |
-| 2023 | 839 | 652 | 131 | 355 | 14 | 20,1 % |
-| 2022 | 345 | 290 | 77 | 139 | 8 | 26,6 % |
-| 2021 | 166 | 133 | 42 | 53 | 13 | 31,6 % |
-| 2020 | 79 | 69 | 17 | 35 | 10 | 24,6 % |
-| 2019 | 159 | 148 | 63 | 61 | 18 | 42,6 % |
+| 2026 | 636 | 189 | 179 | 0 | 10 | 5 % |
+| 2025 | 1.106 | 379 | 227 | 0 | 152 | 40 % |
+| 2024 | 1.464 | 698 | 192 | 3 | 503 | 72 % |
+| 2023 | 839 | 652 | 113 | 18 | 521 | 80 % |
+| 2022 | 345 | 290 | 56 | 21 | 213 | 73 % |
+| 2021 | 166 | 133 | 29 | 13 | 91 | 68 % |
+| 2020 | 79 | 69 | 9 | 9 | 51 | 74 % |
+| 2019 | 159 | 148 | 27 | 36 | 85 | 57 % |
 
-Las promociones recientes (2025 y 2026) aún están dentro de plazo: su retención se parece más a un punto de partida que a un resultado.
-Las de **2019 a 2023** ya han tenido tiempo: entraron 1.292 al cursus, **330 siguen abiertos (26 %)**, 706 (55 %) terminaron en blackhole o
-baja y 256 (20 %) cerraron de otra forma.
+Las promociones recientes (2025 y 2026) aún están dentro de plazo: su porcentaje es un punto de partida, no un resultado. En las de **2019 a 2023**,
+con 1.292 alumnos en el cursus, **961 (74 %) cerraron sin graduarse, 234 (18 %) siguen activos y 97 (8 %) se graduaron**.
 
-### Ritmo de blackholeados en los últimos 24 meses
+### Cuándo se cierran: por mes de cierre
 
-Según la fecha de blackhole que devuelve la API (que es orientativa, ver las limitaciones):
+Cursus cerrados sin graduarse, por mes en que se cerraron (los últimos 23 meses completos):
 
-| Mes | Alumnos | Mes | Alumnos | Mes | Alumnos |
+| Mes | Cierres | Mes | Cierres | Mes | Cierres |
 |---|---:|---|---:|---|---:|
-| 2024-11 | 29 | 2025-07 | 3 | 2026-03 | 5 |
-| 2024-12 | 36 | 2025-08 | 3 | 2026-04 | 5 |
-| 2025-01 | 15 | 2025-09 | 2 | 2026-05 | 6 |
-| 2025-02 | 10 | 2025-10 | 4 | 2026-06 | 1 |
-| 2025-03 | 38 | 2025-11 | 4 | 2026-07 | 4 |
-| 2025-04 | 11 | 2025-12 | 8 | 2026-08 | 7 |
-| 2025-05 | 9 | 2026-01 | 7 | 2026-09 | 0 |
-| 2025-06 | 10 | 2026-02 | 4 | **Total** | **221** |
+| 2024-11 | 29 | 2025-08 | 42 | 2026-05 | 35 |
+| 2024-12 | 22 | 2025-09 | 49 | 2026-06 | 27 |
+| 2025-01 | 28 | 2025-10 | 35 | 2026-07 | 30 |
+| 2025-02 | 44 | 2025-11 | 57 | 2026-08 | 21 |
+| 2025-03 | 47 | 2025-12 | 20 | 2026-09 | 21 |
+| 2025-04 | 52 | 2026-01 | 34 | | |
+| 2025-05 | 125 | 2026-02 | 39 | **Total** | **971** |
+| 2025-06 | 57 | 2026-03 | 35 | **Media** | **42 al mes** |
+| 2025-07 | 95 | 2026-04 | 27 | | |
 
-El pico de noviembre de 2024 a marzo de 2025 (128 alumnos en cinco meses) podría corresponder a la promoción de 2023, que acumula 355
-blackholeados (es una hipótesis: los datos no dicen en qué momento concreto de cada promoción ocurre). La caída posterior
-**no se debe interpretar como que mejora la situación**: en el currículo nuevo el blackhole depende de los plazos de cada milestone y la
-fecha de la API ya no lo refleja (hay 208 alumnos con el cursus abierto y una fecha ya pasada que no cuentan aquí).
+Son unos **42 cursus cerrados al mes** de media, con picos en mayo y julio de 2025. Se agrupan por la fecha real de cierre y no por la de blackhole
+de la API, precisamente porque esa fecha no es fiable.
+
+### ¿Son todos blackholes? Qué dicen las fechas
+
+Comparando la fecha de cierre con la fecha de blackhole de la API, los 1.626 cierres se reparten así:
+
+| Relación con la fecha de la API | Alumnos | % | Cierre respecto a esa fecha (p10 · mediana · p90) |
+|---|---:|---:|---|
+| **En su fecha** (entre 1 día antes y 60 después) | 768 | 47 % | de 0,8 a 58 días después, mediana **+1 día** |
+| **Antes de su fecha** | 553 | 34 % | de 78 a 16 días antes, mediana **32 días antes** |
+| **Mucho después de su fecha** (más de 60 días) | 305 | 19 % | de 78 a 248 días después, mediana **112 días después** |
+
+**Lectura.** Si hubiera bajas voluntarias, los cierres anteriores a la fecha se repartirían al azar. Se concentran en una franja estrecha, de 2 a 11 semanas
+antes, que es lo que cabe esperar de una regla (el plazo de un milestone que la API no refleja) y no de decisiones personales. Los cierres posteriores son
+alumnos que siguieron meses más allá de su fecha (un freeze la alarga y la API no lo anota) y acabaron igualmente cerrados. Por eso lo robusto es la
+cifra total (**1.626**) y no la separación entre las tres etiquetas, que solo describe la relación con una fecha poco fiable.
 
 ## 2. La oportunidad: se pierden pronto y tarde en detectarse
 
 ### Con qué progreso cierran
 
-| | Blackholeados (768) | Baja antes (553) |
-|---|---:|---:|
-| Mediana de días en el cursus antes de cerrar | **392** | **209** |
-| Nivel mediano al cerrar | 1,4 | 1,2 |
-| Cerraron con nivel menor que 3 | 79 % | 87 % |
-| Cerraron con nivel menor que 5 | 97 % | 99,6 % |
-| No validaron ningún Common Core Rank | 28 % | 23 % |
-| No pasaron del Rank 01 | **84 %** | **94 %** |
+| | Todos (1.626) | En su fecha (768) | Antes (553) | Después (305) |
+|---|---:|---:|---:|---:|
+| Mediana de días en el cursus | **361** | 392 | 209 | 788 |
+| Nivel mediano al cerrar | **1,9** | 1,4 | 1,2 | 3,3 |
+| Cerraron con nivel menor que 3 | 73 % | 79 % | 87 % | 34 % |
+| Cerraron con nivel menor que 5 | 96 % | 97 % | 99,6 % | 84 % |
+| No validaron ningún Common Core Rank | 21 % | 28 % | 23 % | 0 % |
+| No pasaron del Rank 01 | **80 %** | 84 % | 94 % | 43 % |
 
-Último rank validado antes de cerrar:
+Último rank validado antes de cerrar (todos):
 
-| | Ninguno | Rank 00 | Rank 01 | Rank 02 | Rank 03 | Rank 04 | Rank 05 |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| Blackholeados | 215 | 298 | 135 | 73 | 30 | 16 | 1 |
-| Baja antes | 125 | 182 | 213 | 28 | 4 | 1 | 0 |
+| Ninguno | Rank 00 | Rank 01 | Rank 02 | Rank 03 | Rank 04 | Rank 05 |
+|---:|---:|---:|---:|---:|---:|---:|
+| 340 | 481 | 477 | 176 | 90 | 56 | 6 |
 
-**Lectura.** Quien termina blackholeado pasa **más de un año en el cursus sin salir del primer tramo** (nivel mediano 1,4). Es una ventana
-larga durante la que un aviso, una comparación con su promoción o una mano de alguien que ya pasó el proyecto pueden cambiar algo. Quien se da
-de baja lo hace antes (unos siete meses), también con poco avance.
+**Lectura.** La mayoría cierra el cursus **en el primer tramo**, tras casi un año con un nivel bajo (mediana 361 días, nivel 1,9). Es una ventana larga en la que
+un aviso, una comparación con su promoción o una mano de alguien que ya pasó el proyecto pueden cambiar algo. Quienes cierran **meses después** de su fecha (los
+que pasaron por un freeze) son otro perfil: llegaron más lejos (nivel 3,3, más de dos años de media) y todos validaron algún rank.
 
 ### Cuánto tardan los que sí avanzan
 
@@ -146,31 +159,31 @@ que compararse con el ritmo de la promoción para ese tramo, no con una cifra fi
 
 ### Cuántos están hoy en esa situación
 
-De los **934** alumnos con el cursus abierto, 375 (40 %) ya tienen los seis ranks validados. Quedan **559** con algo por validar:
+De los **833** alumnos activos, 282 (34 %) ya tienen los seis ranks validados y 106 no han validado ninguno. Quedan **551** con algo por validar:
 
-| Días desde el último rank validado | Alumnos | % de los 559 |
+| Días desde el último rank validado | Alumnos | % de los 551 |
 |---|---:|---:|
 | Menos de 30 | 157 | 28 % |
 | 30 a 90 | 112 | 20 % |
 | 90 a 180 | 172 | 31 % |
 | 180 a 365 | 89 | 16 % |
-| Más de 365 | 29 | 5 % |
+| Más de 365 | 21 | 4 % |
 
-**290 (52 %)** llevan más de 90 días y **118 (21 %)** más de 180. No todos están en riesgo (los tramos tardíos duran más), pero es la
-población en la que mirar primero. Además, **45** alumnos tienen la fecha de blackhole de la API en menos de 30 días y **208** la tienen ya pasada
-sin estar blackholeados: la fecha oficial **no sirve** para saber quién necesita ayuda.
+**282 (51 %)** llevan más de 90 días y **110 (20 %)** más de 180. No todos están en riesgo (los tramos tardíos duran más), pero es la
+población en la que mirar primero. Además, **45** alumnos activos tienen la fecha de blackhole de la API en menos de 30 días y **208** la tienen ya pasada
+sin que su cursus esté cerrado: la fecha oficial **no sirve** para saber quién necesita ayuda.
 
 ## 3. La propuesta: qué hace 42 Stats con esto
 
 | Hallazgo | Qué falta hoy | Qué aporta 42 Stats |
 |---|---|---|
-| Más de un año de atasco antes del blackhole | Nadie le dice al alumno cómo va respecto a los demás | **Mi panel**: ritmo frente a su promoción, rank y milestones, señales de atasco y consejos por reglas |
-| La fecha oficial de blackhole no es fiable | El alumno no ve su margen real; el deadline y el freeze no están en la API pública | El alumno indica su **deadline y su freeze a mano**, y el análisis los usa; el blackhole de la API se muestra solo como orientativo |
-| El 84 % no pasa del Rank 01 | Los que ya pasaron cada proyecto no tienen un canal ordenado para ayudar | **Ayuda entre alumnos**: recursos revisados, mentores que validaron cada proyecto, peticiones, «Quiero ayudar» y puntos verificados |
-| El cierre se decide sin ver el panorama del campus | Ni alumnos ni staff ven dónde se atascan las promociones | **Estadísticas del campus**: retención por promoción, tiempo entre milestones, proyectos que se atascan, asistencia |
+| Casi un año de nivel bajo antes de cerrar el cursus | Nadie le dice al alumno cómo va respecto a los demás | **Mi panel**: ritmo frente a su promoción, rank y milestones, señales de atasco y consejos por reglas |
+| La fecha oficial de blackhole no es fiable (cierres 2 a 11 semanas antes, o meses después) | El alumno no ve su margen real; el deadline y el freeze no están en la API pública | El alumno indica su **deadline y su freeze a mano**, y el análisis los usa; el blackhole de la API se muestra solo como orientativo |
+| El 80 % no pasa del Rank 01 | Los que ya pasaron cada proyecto no tienen un canal ordenado para ayudar | **Ayuda entre alumnos**: recursos revisados, mentores que validaron cada proyecto, peticiones, «Quiero ayudar» y puntos verificados |
+| Los cierres se deciden sin ver el panorama del campus | Ni alumnos ni staff ven dónde se atascan las promociones | **Estadísticas del campus**: cierres por promoción y por mes, tiempo entre milestones, proyectos que se atascan, asistencia |
 
-Hay quien puede ayudar: 375 alumnos con el cursus abierto ya tienen los seis ranks validados, y la mayoría de los 934 ha pasado ya el primer tramo
-(solo 109 no han validado ningún rank). Falta el canal ordenado, no la gente.
+Hay quien puede ayudar: 282 alumnos activos ya tienen los seis ranks validados y 102 se han graduado, y la mayoría de los 833 ha pasado ya el primer tramo
+(solo 106 no han validado ningún rank). Falta el canal ordenado, no la gente.
 
 ### Viabilidad técnica (ya demostrada)
 
@@ -184,35 +197,34 @@ Hay quien puede ayudar: 375 alumnos con el cursus abierto ya tienen los seis ran
 
 ## Cómo comprobaremos que funciona
 
-**Hoy no sabemos si 42 Stats reduce el abandono.** Estos datos describen el problema; no miden el efecto de la herramienta (la web lleva
-días en uso: 3 alumnos han iniciado sesión desde que existe el registro de accesos). Para saberlo proponemos medir, mes a mes:
+**Hoy no sabemos si 42 Stats reduce los cierres.** Estos datos describen el problema; no miden el efecto de la herramienta (la web lleva
+días en uso: 3 alumnos habían iniciado sesión cuando se escribió este documento). Para saberlo proponemos medir, mes a mes:
 
 | Qué | Cómo se mide | Qué esperaríamos si ayuda |
 |---|---|---|
-| **Adopción** | Alumnos distintos con sesión (registro de accesos), sobre los 934 con el cursus abierto | Crece y se mantiene; no un pico el primer día |
-| **Atascos** | % de alumnos con ranks pendientes y más de 180 días sin validar (21 % hoy) | Baja entre quienes usan la web |
+| **Adopción** | Alumnos distintos con sesión (registro de accesos), sobre los 833 activos | Crece y se mantiene; no un pico el primer día |
+| **Atascos** | % de alumnos con ranks pendientes y más de 180 días sin validar (20 % hoy) | Baja entre quienes usan la web |
 | **Ritmo** | Mediana de días entre milestones, comparando usuarios y no usuarios | Más corta entre usuarios |
 | **Ayuda** | Peticiones abiertas, tiempo hasta el primer «Quiero ayudar», puntos verificados | Respuesta en horas o pocos días; mentores nuevos cada mes |
-| **Retención** | % de una promoción con el cursus abierto a los 12 meses, para promociones con acceso a la web frente a las que no lo tuvieron | Mayor en las que la usaron |
+| **Cierres** | % de una promoción que cierra el cursus sin graduarse a los 12 meses, para promociones con acceso a la web frente a las que no lo tuvieron | Menor en las que la usaron |
 
 **Cautelas.** Quien usa la web probablemente ya está más motivado (sesgo de selección), por lo que una diferencia entre usuarios y no usuarios
 no prueba por sí sola que la herramienta funcione. La comparación más fiable es la de promociones con y sin acceso, y aun así no controla otros
-cambios del campus. Para los plazos reales de cada milestone y para distinguir baja voluntaria de blackhole por plazo haría falta que el staff
-comparta los datos que la API pública no expone.
+cambios del campus. Para los plazos reales de cada milestone y para conocer el motivo exacto de cada cierre haría falta que el staff comparta los datos
+que la API pública no expone.
 
 ## Cómo se ha medido y qué no dicen los datos
 
 - **Fuente:** API pública de 42 sincronizada a la base local; datos del campus 22 (Madrid) y del 42cursus (id 21). Cifras del 4 de octubre de 2026.
-- **«Entraron al cursus»:** alumnos (`kind = student`) con un registro en el 42cursus; se excluyen las cuentas de staff y las externas. **«Abierto»:**
-  sin fecha de cierre o con cierre futuro. El cálculo solo sincroniza el 42cursus, así que las piscinas no tienen registro propio: se reconocen por los intentos de proyecto.
-- **«Blackholeado»:** cursus cerrado entre un día antes y 60 días después de su `blackholed_at`. **«Baja antes»:** cerrado más de un día antes.
-  **«Otro cierre»:** cualquier otro caso (por ejemplo, un cierre mucho después de la fecha de blackhole o sin ella).
-- **Se mezclan dos cosas en «baja antes».** Como la fecha de blackhole de la API no refleja los plazos por milestone del currículo nuevo,
-  parte de las «bajas» de 2024 y 2025 pueden ser alumnos expulsados por un plazo de milestone anterior a esa fecha. Por eso el dato robusto es
-  la **suma blackholeados + bajas (1.321)**, no la separación entre las dos.
+- **Alumno:** cuenta con `kind = student` y registro en el 42cursus; se excluyen las cuentas de staff y las externas.
+- **Activo:** cursus abierto (sin fecha de cierre o con cierre futuro) y no graduado. **Graduado:** marcado como *alumni* por la API.
+- **Cerró sin graduarse:** cursus cerrado y no alumni. Como en 42 no hay baja voluntaria, es en la práctica un cierre por blackhole, pero **el motivo exacto no
+  está confirmado**: la API no lo indica.
+- **Relación con la fecha de la API:** «en su fecha» = cierre entre 1 día antes y 60 después de `blackholed_at`; «antes» = más de 1 día antes; «después» = más de
+  60 días después o sin fecha (1 caso). Describe la fecha, **no la causa**.
 - **Las promociones recientes** no han tenido tiempo de resolverse: no se comparan con las antiguas.
 - **«Último rank validado»** sale de los *Common Core Rank* del 42cursus; los alumnos con los seis validados quedan fuera del cómputo de atascos.
-- **No hay causalidad:** describir cuándo y con qué progreso se van no explica por qué.
+- **No hay causalidad:** describir cuándo y con qué progreso se cierra no explica por qué.
 - **No hay datos individuales:** el script solo imprime recuentos y medianas; el repositorio no contiene personas.
 
 ## Reproducir las cifras
@@ -223,3 +235,4 @@ docker run --rm -i -v stats42_stats42_data:/data --entrypoint python stats42:lat
 ```
 
 Imprime un JSON con todo lo de este documento. Para repetirlo en otra fecha basta con volver a ejecutarlo y actualizar las tablas.
+(La imagen de la VM debe tener la versión del código que separa graduados y excluye al staff; si no, monta `src/stats42/stats.py` sobre ella.)

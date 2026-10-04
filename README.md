@@ -83,10 +83,11 @@ de ordenador. La primera carga puede tardar horas por el límite de la API (2 pe
 | **Cheating** | Los intentos con nota −42 se excluyen siempre |
 | **Notas válidas** | Solo entre 0 y 125 en las medias (la API contiene notas corruptas) |
 | **Cursus de un intento** | El del intento (`project_users.cursus_ids`), no el del catálogo de proyectos, que incluye otros campus |
-| **Cursus abierto** | Sin fecha de cierre, o con cierre futuro |
-| **Blackholeado** | Cursus cerrado entre 1 día antes y 60 días después de su `blackholed_at` |
-| **Baja antes** | Cursus cerrado más de 1 día antes de `blackholed_at` |
-| **Otro cierre** | Cualquier otro cierre (mucho después de la fecha, o sin ella) |
+| **Alumno** | Cuenta con `kind = student`; las de staff (`admin`) y las externas nunca cuentan, aunque tengan registro en el 42cursus |
+| **Activo** | Cursus abierto (sin fecha de cierre, o con cierre futuro) y no graduado |
+| **Graduado** | Marcado como *alumni* por la API. Conserva el cursus «abierto», pero ya no avanza ni corre ningún plazo, así que se cuenta aparte |
+| **Cerró sin graduarse** | Cursus cerrado y no alumni. **En 42 no existe la baja voluntaria** (quien se va deja de venir y acaba blackholeado), así que en la práctica es un cierre por blackhole, aunque la API no indica el motivo |
+| **Relación con la fecha de la API** | Solo describe cuándo se cerró respecto a `blackholed_at`: *en su fecha* (entre 1 día antes y 60 después), *antes* (más de 1 día antes) o *después* (más de 60 días después o sin fecha). **No es la causa**: esa fecha es orientativa |
 | **Milestones / ranks** | Los *Common Core Rank 00 a 05* (quests del 42cursus) |
 | **Ritmo** | Nivel por mes desde que empezó el cursus; se compara en percentiles con su promoción |
 | **Hábitos** | Cuatro cuartiles de ritmo y su mediana de horas en 30 días: una correlación, no una causa |
@@ -236,7 +237,7 @@ copy .env.example .env              # rellena FT_UID y FT_SECRET (nunca los suba
 ## Pruebas
 
 ```powershell
-.\.venv\Scripts\python -m pytest -q        # 360 pruebas de Python
+.\.venv\Scripts\python -m pytest -q        # 363 pruebas de Python
 cd frontend; npm test                       # 45 pruebas del frontend
 ```
 
@@ -300,7 +301,8 @@ Brevo tiene un plan gratuito de 300 correos al día:
 **Límites**
 - El deadline real de cada milestone y los freezes no están en la API pública; hasta que 42 los exponga, los indica el alumno.
 - La fecha de blackhole de la API es orientativa y en el currículo nuevo no refleja los plazos por milestone; se muestra siempre como tal.
-- «Baja antes» mezcla bajas voluntarias con cierres por un plazo anterior a la fecha de la API; la suma blackholeados + bajas es el dato robusto.
+- No hay «bajas» en 42: los cursus cerrados sin graduarse son blackholes, pero el motivo exacto no está confirmado. Cierran en su fecha, semanas antes (plazos por
+  milestone) o meses después (freezes); el dato robusto es el total de cierres, no su reparto según la fecha de la API.
 - La ayuda ocurre fuera de la web: los puntos suben el coste de abusar y dejan detectar anomalías, pero no impiden que dos alumnos reales se pongan de acuerdo.
 - Los límites de ritmo viven en memoria: valen con una sola instancia de la web.
 - El registro de accesos cuenta inicios de sesión, no visitas.
