@@ -1,0 +1,11 @@
+[Unit]
+Description=Copia diaria de 42stats
+
+[Timer]
+# Después de la sincronización diaria (04:30), que normalmente termina en minutos
+OnCalendar=*-*-* 07:00:00 Europe/Madrid
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

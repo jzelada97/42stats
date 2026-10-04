@@ -40,6 +40,20 @@ services:
     cpus: "0.5"
     mem_limit: 512m
 
+  # Copia diaria de las dos bases (la programa deploy/stats42-backup.timer):
+  #   docker compose -f docker-compose.vm.yml run --rm backup
+  # Las copias van a /var/backups/stats42 en el host (carpeta del usuario 1000, el de la imagen).
+  backup:
+    build: .
+    image: stats42:latest
+    volumes:
+      - stats42_data:/data
+      - /var/backups/stats42:/backups
+    command: ["backup", "--dest", "/backups", "--keep", "14"]
+    restart: "no"
+    cpus: "0.5"
+    mem_limit: 256m
+
 volumes:
   stats42_data:
 

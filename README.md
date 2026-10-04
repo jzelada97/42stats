@@ -62,3 +62,11 @@ Para activarlo hay que añadir `FT_BASE_URL/auth/callback` como *Redirect URI* d
 
 Los logins de `FT_ADMIN_LOGINS` ejecutan, al entrar, un sondeo que compara lo que devuelve el token del alumno con el de la
 aplicación (y con la API interna `intrapy`) y lo guarda en `/data/probe-<login>.json`.
+
+## Copias de seguridad
+
+`stats42 backup --dest DIR --keep 14` guarda una copia consistente (API de copias de SQLite, válida con la sincronización
+escribiendo) de la base del campus y de la de ajustes de usuarios, comprueba su integridad, la comprime (`.db.gz`, permisos 0600)
+y conserva las 14 más recientes de cada una. En la VM la lanza `deploy/stats42-backup.timer` cada día a las 07:00 y las deja en
+`/var/backups/stats42`. Restaurar: `gunzip -c stats42-AAAAMMDD-HHMMSS.db.gz > stats42.db` con la web y la sincronización paradas.
+Las copias están en el mismo disco que los datos: para protegerse de perder la VM hay que bajarlas a otro sitio de vez en cuando.

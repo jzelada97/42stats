@@ -1,8 +1,10 @@
-"""CLI: `stats42 check | sync | status`."""
+"""CLI: `stats42 check | sync | status | backup`."""
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional
 
 import typer
@@ -115,6 +117,28 @@ def audit(
     typer.echo("«ocultas» = filas que la API cuenta en X-Total pero no entrega; no se pueden cargar.")
     if bad:
         raise typer.Exit(1)
+
+
+@app.command()
+def backup(
+    dest: Path = typer.Option(..., "--dest", help="Carpeta donde guardar las copias."),
+    keep: int = typer.Option(14, "--keep", min=1, help="Copias que se conservan de cada base."),
+) -> None:
+    """Copia la base del campus y la de ajustes de usuarios (comprobada, comprimida y rotada)."""
+    from .backup import backup_databases
+
+    urls = [os.environ.get("FT_DATABASE_URL", "sqlite:///data/stats42.db"),
+            os.environ.get("FT_SETTINGS_DATABASE_URL", "sqlite:///data/user_settings.db")]
+    try:
+        made = backup_databases(urls, dest, keep)
+    except Exception as e:      # una copia mala debe hacer fallar el servicio para que el timer lo deje registrado
+        typer.secho(f"Copia FALLIDA: {e}", fg="red")
+        raise typer.Exit(1)
+    if not made:
+        typer.secho("No hay ninguna base SQLite que copiar.", fg="red")
+        raise typer.Exit(1)
+    for f in made:
+        typer.echo(f"{f.name}  {f.stat().st_size / 1e6:.1f} MB")
 
 
 @app.command()
