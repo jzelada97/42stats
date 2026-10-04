@@ -577,3 +577,217 @@ def events_exams(s: Session, months: int = 24, now: datetime | None = None) -> d
         "upcoming_events": upcoming(Event, 8, ("kind",)),
         "upcoming_exams": upcoming(Exam, 6),
     }
+
+
+# ---------------------------------------------------------------- panel personal
+
+def _hours_by_user(s: Session, now: datetime, days: int) -> dict[int, float]:
+    out: dict[int, float] = defaultdict(float)
+    for uid, b, e in s.execute(select(Location.user_id, Location.begin_at, Location.end_at)
+                               .where(Location.begin_at >= now - timedelta(days=days))):
+        b, e = _aware(b), _aware(e)
+        if b is None:
+            continue
+        stop = min(e if e else min(now, b + MAX_SESSION), b + MAX_SESSION)
+        if stop > b:
+            out[uid] += (stop - b).total_seconds() / 3600
+    return out
+
+
+def _percentile(sorted_values: list[float], x: float) -> float | None:
+    """Fracción de la muestra por debajo de x (los empates cuentan la mitad)."""
+    if not sorted_values:
+        return None
+    below = sum(1 for v in sorted_values if v < x)
+    equal = sum(1 for v in sorted_values if v == x)
+    return (below + equal / 2) / len(sorted_values)
+
+
+def cohort_context(s: Session, cursus_id: int = 21, now: datetime | None = None) -> dict:
+    """Distribuciones del campus con las que se compara a cada alumno. Pesado: se calcula una vez y se cachea."""
+    now = now or _now()
+    members = _members(s, cursus_id, now)
+    begin = {uid: _aware(b) for uid, b in s.execute(
+        select(CursusUser.user_id, CursusUser.begin_at).where(CursusUser.cursus_id == cursus_id)).all()}
+    current = [m for m in members if m["current"] and m["level"] is not None]
+    paces = sorted(m["level"] / (((now - begin[m["user_id"]]).days / 30.44))
+                   for m in current if begin.get(m["user_id"]) and (now - begin[m["user_id"]]).days >= 91)
+    hours = _hours_by_user(s, now, 30)
+    open_ids = [m["user_id"] for m in members if m["current"]]
+    levels = Counter(int(m["level"]) for m in current)
+    ms = milestones(s, cursus_id, now)
+    return {
+        "paces": paces,
+        "hours": sorted(hours.get(u, 0.0) for u in open_ids),
+        "hours_by_user": dict(hours),
+        "level_hist": [{"level": n, "count": levels.get(n, 0)} for n in range(0, (max(levels) if levels else 0) + 1)],
+        "steps": {x["label"]: x["median_days"] for x in ms["steps"]},
+    }
+
+
+def _sig(key: str, label: str, state: str, value: str, detail: str) -> dict:
+    return {"key": key, "label": label, "state": state, "value": value, "detail": detail}
+
+
+def me(s: Session, user_id: int, ctx: dict, cursus_id: int = 21, now: datetime | None = None) -> dict | None:
+    """Análisis de UN alumno (solo se sirve a su propio usuario). Reglas transparentes, sin modelo."""
+    now = now or _now()
+    user = s.get(User, user_id)
+    if user is None:
+        return None
+    cu = s.execute(select(CursusUser).where(CursusUser.user_id == user_id, CursusUser.cursus_id == cursus_id)).scalars().first()
+    end = _aware(cu.end_at) if cu else None
+    in_cursus = cu is not None and (end is None or end > now)
+    begin = _aware(cu.begin_at) if cu else None
+    signals: list[dict] = []
+    tips: list[str] = []
+
+    # ---- actividad (sesiones de los últimos 84 días y última conexión)
+    monday = (now - timedelta(days=now.weekday())).date()
+    weeks = [monday - timedelta(weeks=i) for i in range(11, -1, -1)]
+    weekly = {w: 0.0 for w in weeks}
+    for b, e in s.execute(select(Location.begin_at, Location.end_at)
+                          .where(Location.user_id == user_id, Location.begin_at >= now - timedelta(days=84))):
+        b, e = _aware(b), _aware(e)
+        stop = min(e if e else min(now, b + MAX_SESSION), b + MAX_SESSION)
+        w = b.date() - timedelta(days=b.weekday())
+        if w in weekly and stop > b:
+            weekly[w] += (stop - b).total_seconds() / 3600
+    last = _aware(s.scalar(select(func.max(Location.begin_at)).where(Location.user_id == user_id)))
+    since_last = (now - last).days if last else None
+    hours30 = ctx["hours_by_user"].get(user_id, 0.0)
+    pct_h = _percentile(ctx["hours"], hours30) if in_cursus else None
+    if since_last is None or since_last > 21:
+        a_state = "warn"
+        a_detail = "No constan sesiones recientes en el campus." if since_last is None else f"Llevas {since_last} días sin conectarte."
+        tips.append("Planifica una sesión corta esta semana: volver a un ritmo regular pesa más que esperar a un bloque largo.")
+    elif pct_h is not None and pct_h >= 0.5 and since_last <= 7:
+        a_state, a_detail = "good", "Estás por encima de la mediana de horas de tu cursus."
+    else:
+        a_state, a_detail = "ok", "Actividad en la media o por debajo de la mediana de tu cursus."
+    signals.append(_sig("activity", "Actividad", a_state, f"{hours30:.0f} h en 30 días",
+                        a_detail + (f" Última conexión hace {since_last} días." if since_last is not None and a_state != "warn" else "")))
+
+    # ---- ritmo de nivel
+    level = cu.level if cu else None
+    my_pace = None
+    if in_cursus and level is not None and begin:
+        months = max((now - begin).days / 30.44, 0.1)
+        my_pace = level / months
+        pct = _percentile(ctx["paces"], my_pace) if months >= 3 else None
+        if pct is None:
+            signals.append(_sig("pace", "Ritmo de nivel", "ok", f"nivel {level:.2f}",
+                                "Llevas poco tiempo en el cursus para compararte con fiabilidad."))
+        else:
+            state = "good" if pct >= 0.66 else "ok" if pct >= 0.33 else "warn"
+            signals.append(_sig("pace", "Ritmo de nivel", state, f"nivel {level:.2f} en {months:.0f} meses",
+                                f"Avanzas más rápido que el {round(pct * 100)} % de los alumnos con el cursus abierto."))
+            if state == "warn":
+                tips.append("Tu nivel sube más despacio que el de la mayoría. Elige el siguiente proyecto de tu milestone y reserva horas fijas cada semana.")
+
+    # ---- milestones (Common Core Rank 00..05)
+    ranks = sorted((int(m[1]), qid) for qid, name in
+                   s.execute(select(Quest.id, Quest.name).where(Quest.cursus_id == cursus_id))
+                   if name and (m := RANK_RE.match(name)))
+    done: dict[int, datetime] = {}
+    if ranks:
+        rank_of = {qid: n for n, qid in ranks}
+        for qid, at in s.execute(select(QuestUser.quest_id, QuestUser.validated_at)
+                                 .where(QuestUser.user_id == user_id, QuestUser.quest_id.in_(list(rank_of)),
+                                        QuestUser.validated_at.is_not(None))):
+            n, at = rank_of[qid], _aware(at)
+            if n not in done or at < done[n]:
+                done[n] = at
+    timeline, prev = [], begin
+    for n, _ in ranks:
+        if n in done:
+            timeline.append({"label": f"Rank {n:02d}", "date": done[n].date().isoformat(),
+                             "days_from_previous": round((done[n] - prev).total_seconds() / 86400) if prev else None})
+            prev = done[n]
+    next_ms = None
+    if in_cursus and ranks:
+        pending = [n for n, _ in ranks if n not in done]
+        if not pending:
+            signals.append(_sig("milestone", "Milestones", "good", "todos validados", "Has validado todos los Common Core Rank."))
+        else:
+            nxt = pending[0]
+            anchor = max(done.values()) if done else begin
+            days = (now - anchor).days if anchor else None
+            prev_label = f"Rank {max(done):02d}" if done else None
+            step = f"{prev_label} → Rank {nxt:02d}" if prev_label else f"Inicio → Rank {nxt:02d}"
+            typical = ctx["steps"].get(step) if prev_label else ctx["steps"].get(f"Inicio → Rank {ranks[0][0]:02d}")
+            if days is None:
+                state = "ok"
+            elif typical is None:
+                state = "ok"
+            else:
+                state = "good" if days <= typical else "ok" if days <= typical * 1.5 else "warn"
+            next_ms = {"label": f"Rank {nxt:02d}", "days_since_last": days, "typical_days": typical}
+            detail = (f"Llevas {days} días desde tu último hito; lo habitual hasta el siguiente son {typical:.0f}."
+                      if days is not None and typical is not None else "No hay datos suficientes para comparar el siguiente hito.")
+            signals.append(_sig("milestone", "Siguiente milestone", state, f"Rank {nxt:02d}", detail))
+            if state == "warn":
+                tips.append(f"Llevas {days} días sin validar un milestone y lo habitual son {typical:.0f}. Identifica qué proyecto te frena y pide ayuda a alguien que ya lo tenga.")
+
+    # ---- evaluaciones y proyectos
+    evals90 = s.scalar(select(func.count()).select_from(Evaluation).where(
+        Evaluation.corrector_id == user_id, Evaluation.filled_at >= now - timedelta(days=90))) or 0
+    points = user.correction_point
+    if evals90 >= 3:
+        e_state, e_detail = "good", "Evalúas con regularidad."
+    elif evals90 >= 1:
+        e_state, e_detail = "ok", "Has evaluado alguna vez en los últimos 90 días."
+    elif points is not None and points <= 2:
+        e_state, e_detail = "warn", "Casi no te quedan puntos de corrección y no has evaluado en 90 días."
+        tips.append("Evalúa a otros alumnos para recuperar puntos de corrección; además se aprende mucho de los proyectos ajenos.")
+    else:
+        e_state, e_detail = "ok", "No has evaluado en los últimos 90 días."
+    signals.append(_sig("evaluations", "Evaluaciones", e_state, f"{evals90} en 90 días",
+                        e_detail + (f" Puntos de corrección: {points}." if points is not None else "")))
+
+    ongoing = []
+    for name, created in s.execute(select(Project.name, ProjectUser.created_at).join(Project, Project.id == ProjectUser.project_id)
+                                   .where(ProjectUser.user_id == user_id, ProjectUser.status == "in_progress")
+                                   .order_by(ProjectUser.created_at)):
+        c = _aware(created)
+        ongoing.append({"name": name, "days": (now - c).days if c else None})
+    stuck = [o for o in ongoing if o["days"] is not None and o["days"] > 60]
+    if stuck:
+        tips.append(f"Tienes «{stuck[0]['name']}» en curso desde hace {stuck[0]['days']} días. Si estás bloqueado, divide el proyecto en partes pequeñas y avanza una por sesión.")
+    validated90 = s.scalar(select(func.count()).select_from(ProjectUser).where(
+        ProjectUser.user_id == user_id, ProjectUser.validated.is_(True), ProjectUser.marked_at >= now - timedelta(days=90))) or 0
+
+    # ---- veredicto
+    warns = sum(1 for x in signals if x["state"] == "warn")
+    goods = sum(1 for x in signals if x["state"] == "good")
+    if not in_cursus:
+        status = {"key": "none", "label": "Sin cursus abierto", "summary": "No tienes el 42cursus abierto: te mostramos tu actividad."}
+    elif warns >= 2:
+        status = {"key": "attention", "label": "Necesita atención", "summary": "Varias señales por debajo de la media de tu cursus. Mira los consejos."}
+    elif warns == 1:
+        status = {"key": "normal", "label": "Normal, con un punto a vigilar", "summary": "Vas en la media, con una señal que conviene mejorar."}
+    elif goods >= 3:
+        status = {"key": "great", "label": "Va muy bien", "summary": "Estás por encima de la media de tu cursus en casi todo."}
+    else:
+        status = {"key": "normal", "label": "Normal", "summary": "Estás en la media de tu cursus."}
+
+    bh = _aware(cu.blackholed_at) if cu else None
+    return {
+        "login": user.login,
+        "pool": " ".join(x for x in (user.pool_month, user.pool_year) if x),
+        "in_cursus": in_cursus,
+        "level": round(level, 2) if level is not None else None,
+        "days_in_cursus": (now - begin).days if begin else None,
+        "blackhole_api": bh.date().isoformat() if bh else None,   # orientativo: no es el deadline real
+        "status": status,
+        "signals": signals,
+        "tips": tips,
+        "milestones": timeline,
+        "next_milestone": next_ms,
+        "level_context": {"hist": ctx["level_hist"], "my_bucket": int(level) if level is not None else None,
+                          "percentile": round(_percentile(ctx["paces"], my_pace), 3) if my_pace is not None and ctx["paces"] else None},
+        "activity": {"hours_30d": round(hours30, 1), "last_session_days_ago": since_last,
+                     "weekly": [{"week": w.isoformat(), "hours": round(h, 1)} for w, h in weekly.items()]},
+        "projects": {"validated_90d": validated90, "in_progress": ongoing[:8]},
+        "evaluations": {"done_90d": evals90, "correction_points": points},
+    }
