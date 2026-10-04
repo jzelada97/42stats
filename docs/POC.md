@@ -12,16 +12,17 @@ Prueba de concepto basada en los datos reales del campus 42 Madrid (4 de octubre
 
 ## Resumen
 
-- De **2.611** alumnos que han entrado alguna vez en el 42cursus, solo **960 (37 %)** lo tienen abierto hoy. **1.321 (51 %)** lo cerraron por
-  blackhole (768) o por baja antes de su fecha de blackhole (553). Otros 330 (13 %) lo cerraron de otra forma.
+- De **2.561** alumnos que han entrado alguna vez en el 42cursus, solo **934 (36 %)** lo tienen abierto hoy. **1.321 (52 %)** lo cerraron por
+  blackhole (768) o por baja antes de su fecha de blackhole (553). Otros 306 (12 %) lo cerraron de otra forma. Solo se cuentan **alumnos
+  del 42cursus**: ni las cuentas de staff ni quien solo hizo una piscina (ver [a quién se cuenta](#a-quién-se-cuenta)).
 - En las promociones de 2019 a 2023, que ya han tenido tiempo de resolverse, **solo el 26 % de quienes entraron al cursus sigue abierto**:
   tres de cada cuatro ya no están.
 - **Se quedan atascados al principio y durante mucho tiempo.** Los blackholeados cierran con un nivel mediano de **1,4** tras una mediana de
   **392 días** (13 meses) en el cursus; el **84 %** no pasó del Rank 01. Hay más de un año para detectar el atasco y ayudar.
 - **La fecha oficial de blackhole no sirve para anticiparse.** En el currículo nuevo los plazos van por milestone y la API no los expone:
-  205 alumnos con el cursus abierto tienen una fecha de blackhole ya pasada, y el alumno no ve cuánto margen real le queda.
-- Hoy, de los 585 alumnos con el cursus abierto a los que aún les quedan ranks, **313 (54 %) llevan más de 90 días sin validar uno** y
-  **137 (23 %) más de 180**.
+  208 alumnos con el cursus abierto tienen una fecha de blackhole ya pasada, y el alumno no ve cuánto margen real le queda.
+- Hoy, de los 559 alumnos con el cursus abierto a los que aún les quedan ranks, **290 (52 %) llevan más de 90 días sin validar uno** y
+  **118 (21 %) más de 180**.
 - 42 Stats cubre ese hueco con ritmo personal frente a la promoción, señales de atasco, consejos y ayuda entre alumnos. **Lo que no
   demuestran estos datos es que reduzca el abandono**: eso es una hipótesis que hay que medir (ver [Cómo comprobaremos que funciona](#cómo-comprobaremos-que-funciona)).
 
@@ -31,22 +32,40 @@ Prueba de concepto basada en los datos reales del campus 42 Madrid (4 de octubre
 
 | Situación del cursus | Alumnos | % |
 |---|---:|---:|
-| Abierto hoy | 960 | 36,8 % |
-| Cerrado por blackhole | 768 | 29,4 % |
-| Cerrado por baja antes del blackhole | 553 | 21,2 % |
-| Cerrado de otra forma | 330 | 12,6 % |
-| **Total que han entrado** | **2.611** | 100 % |
+| Abierto hoy | 934 | 36,5 % |
+| Cerrado por blackhole | 768 | 30,0 % |
+| Cerrado por baja antes del blackhole | 553 | 21,6 % |
+| Cerrado de otra forma | 306 | 11,9 % |
+| **Total que han entrado** | **2.561** | 100 % |
 
 ```mermaid
-pie showData title Estado del 42cursus de los 2.611 alumnos que han entrado
-    "Abierto" : 960
+pie showData title Estado del 42cursus de los 2.561 alumnos que han entrado
+    "Abierto" : 934
     "Blackholeado" : 768
     "Baja antes del blackhole" : 553
-    "Otro cierre" : 330
+    "Otro cierre" : 306
 ```
 
-De los 1.651 cursus ya cerrados, **el 80 % terminó en blackhole o baja**. En la base hay 4.806 alumnos registrados (incluida la piscina);
-2.611 llegaron al cursus.
+De los 1.627 cursus ya cerrados, **el 81 % terminó en blackhole o baja**.
+
+#### A quién se cuenta
+
+La base tiene 8.460 cuentas. Los **2.561** de arriba son las que cumplen **las dos** condiciones: ser alumno (`kind = student`) y tener un registro
+en el 42cursus. Quedan fuera:
+
+| Cuentas | Número | Qué son |
+|---|---:|---|
+| Alumnos con registro en el 42cursus | **2.561** | **Los que se cuentan en este documento** |
+| Alumnos que solo hicieron la C Piscine | 2.082 | Pasaron por la piscina y no han entrado (todavía) al cursus |
+| Alumnos sin ningún intento de proyecto | 111 | Cuentas sin actividad |
+| Otros | 52 | Casos sueltos: la mayoría con intentos en el 42cursus pero **sin registro de cursus** en los datos (no se cuentan), y algunos con intentos solo en cursus antiguos |
+| Cuentas de staff (`admin`) o externas con registro en el 42cursus | 50 | Se excluyen: 26 figuraban como «abiertas» y 24 como «otro cierre»; **ninguna** como blackholeada ni de baja |
+| Cuentas `external` sin registro en el cursus | 3.584 | No son alumnos del campus |
+
+Las piscinas «extra» **no inflan** las cifras: el *Discovery Piscine* y el *Bootcamp Cybersecurity* aparecen en unos 60 alumnos cada uno, y casi todos
+tienen también registro en el 42cursus (los pocos que no, menos de diez, están entre los 52 «otros» que no se cuentan). La C Piscine es la puerta de entrada
+normal, y por eso la columna «Entraron a la piscina» de la tabla de promociones cuenta alumnos que pasaron por ella, no solo los que llegaron al cursus.
+Una limitación: esos 52 casos podrían ser alumnos reales del cursus cuyo registro no está en los datos; son un 2 % y no cambian las conclusiones.
 
 ### Por promoción (año de la piscina)
 
@@ -83,7 +102,7 @@ Según la fecha de blackhole que devuelve la API (que es orientativa, ver las li
 El pico de noviembre de 2024 a marzo de 2025 (128 alumnos en cinco meses) podría corresponder a la promoción de 2023, que acumula 355
 blackholeados (es una hipótesis: los datos no dicen en qué momento concreto de cada promoción ocurre). La caída posterior
 **no se debe interpretar como que mejora la situación**: en el currículo nuevo el blackhole depende de los plazos de cada milestone y la
-fecha de la API ya no lo refleja (hay 205 alumnos con el cursus abierto y una fecha ya pasada que no cuentan aquí).
+fecha de la API ya no lo refleja (hay 208 alumnos con el cursus abierto y una fecha ya pasada que no cuentan aquí).
 
 ## 2. La oportunidad: se pierden pronto y tarde en detectarse
 
@@ -115,7 +134,7 @@ Mediana de días entre milestones, con todos los alumnos que validaron ambos:
 
 | Tramo | Mediana (días) | Alumnos |
 |---|---:|---:|
-| Inicio → Rank 00 | 31 | 2.116 |
+| Inicio → Rank 00 | 31 | 2.112 |
 | Rank 00 → Rank 01 | 68 | 1.584 |
 | Rank 01 → Rank 02 | 134 | 1.040 |
 | Rank 02 → Rank 03 | 153 | 769 |
@@ -127,18 +146,18 @@ que compararse con el ritmo de la promoción para ese tramo, no con una cifra fi
 
 ### Cuántos están hoy en esa situación
 
-De los **960** alumnos con el cursus abierto, 375 (39 %) ya tienen los seis ranks validados. Quedan **585** con algo por validar:
+De los **934** alumnos con el cursus abierto, 375 (40 %) ya tienen los seis ranks validados. Quedan **559** con algo por validar:
 
-| Días desde el último rank validado | Alumnos | % de los 585 |
+| Días desde el último rank validado | Alumnos | % de los 559 |
 |---|---:|---:|
-| Menos de 30 | 157 | 27 % |
-| 30 a 90 | 115 | 20 % |
-| 90 a 180 | 176 | 30 % |
-| 180 a 365 | 93 | 16 % |
-| Más de 365 | 44 | 8 % |
+| Menos de 30 | 157 | 28 % |
+| 30 a 90 | 112 | 20 % |
+| 90 a 180 | 172 | 31 % |
+| 180 a 365 | 89 | 16 % |
+| Más de 365 | 29 | 5 % |
 
-**313 (54 %)** llevan más de 90 días y **137 (23 %)** más de 180. No todos están en riesgo (los tramos tardíos duran más), pero es la
-población en la que mirar primero. Además, **45** alumnos tienen la fecha de blackhole de la API en menos de 30 días y **205** la tienen ya pasada
+**290 (52 %)** llevan más de 90 días y **118 (21 %)** más de 180. No todos están en riesgo (los tramos tardíos duran más), pero es la
+población en la que mirar primero. Además, **45** alumnos tienen la fecha de blackhole de la API en menos de 30 días y **208** la tienen ya pasada
 sin estar blackholeados: la fecha oficial **no sirve** para saber quién necesita ayuda.
 
 ## 3. La propuesta: qué hace 42 Stats con esto
@@ -150,8 +169,8 @@ sin estar blackholeados: la fecha oficial **no sirve** para saber quién necesit
 | El 84 % no pasa del Rank 01 | Los que ya pasaron cada proyecto no tienen un canal ordenado para ayudar | **Ayuda entre alumnos**: recursos revisados, mentores que validaron cada proyecto, peticiones, «Quiero ayudar» y puntos verificados |
 | El cierre se decide sin ver el panorama del campus | Ni alumnos ni staff ven dónde se atascan las promociones | **Estadísticas del campus**: retención por promoción, tiempo entre milestones, proyectos que se atascan, asistencia |
 
-Hay quien puede ayudar: 375 alumnos con el cursus abierto ya tienen los seis ranks validados, y la mayoría de los 960 ha pasado ya el primer tramo
-(solo 132 no han validado ningún rank). Falta el canal ordenado, no la gente.
+Hay quien puede ayudar: 375 alumnos con el cursus abierto ya tienen los seis ranks validados, y la mayoría de los 934 ha pasado ya el primer tramo
+(solo 109 no han validado ningún rank). Falta el canal ordenado, no la gente.
 
 ### Viabilidad técnica (ya demostrada)
 
@@ -170,8 +189,8 @@ días en uso: 3 alumnos han iniciado sesión desde que existe el registro de acc
 
 | Qué | Cómo se mide | Qué esperaríamos si ayuda |
 |---|---|---|
-| **Adopción** | Alumnos distintos con sesión (registro de accesos), sobre los 960 con el cursus abierto | Crece y se mantiene; no un pico el primer día |
-| **Atascos** | % de alumnos con ranks pendientes y más de 180 días sin validar (23 % hoy) | Baja entre quienes usan la web |
+| **Adopción** | Alumnos distintos con sesión (registro de accesos), sobre los 934 con el cursus abierto | Crece y se mantiene; no un pico el primer día |
+| **Atascos** | % de alumnos con ranks pendientes y más de 180 días sin validar (21 % hoy) | Baja entre quienes usan la web |
 | **Ritmo** | Mediana de días entre milestones, comparando usuarios y no usuarios | Más corta entre usuarios |
 | **Ayuda** | Peticiones abiertas, tiempo hasta el primer «Quiero ayudar», puntos verificados | Respuesta en horas o pocos días; mentores nuevos cada mes |
 | **Retención** | % de una promoción con el cursus abierto a los 12 meses, para promociones con acceso a la web frente a las que no lo tuvieron | Mayor en las que la usaron |
@@ -184,7 +203,8 @@ comparta los datos que la API pública no expone.
 ## Cómo se ha medido y qué no dicen los datos
 
 - **Fuente:** API pública de 42 sincronizada a la base local; datos del campus 22 (Madrid) y del 42cursus (id 21). Cifras del 4 de octubre de 2026.
-- **«Entraron al cursus»:** alumnos con un registro en el 42cursus. **«Abierto»:** sin fecha de cierre o con cierre futuro.
+- **«Entraron al cursus»:** alumnos (`kind = student`) con un registro en el 42cursus; se excluyen las cuentas de staff y las externas. **«Abierto»:**
+  sin fecha de cierre o con cierre futuro. El cálculo solo sincroniza el 42cursus, así que las piscinas no tienen registro propio: se reconocen por los intentos de proyecto.
 - **«Blackholeado»:** cursus cerrado entre un día antes y 60 días después de su `blackholed_at`. **«Baja antes»:** cerrado más de un día antes.
   **«Otro cierre»:** cualquier otro caso (por ejemplo, un cierre mucho después de la fecha de blackhole o sin ella).
 - **Se mezclan dos cosas en «baja antes».** Como la fecha de blackhole de la API no refleja los plazos por milestone del currículo nuevo,
