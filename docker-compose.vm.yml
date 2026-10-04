@@ -13,8 +13,6 @@ services:
     container_name: stats42-api       # nombre único en la VM (lo usa Caddy)
     command: ["serve", "--port", "8042"]
     env_file: .env                    # FT_UID/FT_SECRET (OAuth), FT_SESSION_SECRET, FT_BASE_URL, FT_ADMIN_LOGINS
-    environment:
-      FT_PROBE_DIR: /data             # el sondeo del administrador escribe aquí su resultado
     volumes:
       - stats42_data:/data
     networks:

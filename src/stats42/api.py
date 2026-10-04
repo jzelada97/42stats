@@ -4,8 +4,8 @@ from __future__ import annotations
 import logging
 import os
 import re
+import threading
 import time
-from collections import deque
 from collections.abc import Callable, Iterator
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -25,6 +25,7 @@ from . import probe as probemod
 from . import stats
 from .client import FortyTwoClient
 from .db import User, UserSetting, make_engine, make_readonly_engine
+from .ratelimit import RateLimiter
 
 log = logging.getLogger("stats42.auth")
 WEB_DIR = Path(__file__).parent / "web"
@@ -33,26 +34,6 @@ PRIVATE_PATHS = {"/", "/api/me", "/api/session", "/me", "/login", "/campus"}
 CSP = ("default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; "
        "frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'")
 MAX_BODY = 2048          # los POST de esta web son un par de fechas: cualquier cosa mayor es un abuso
-
-
-class RateLimiter:
-    """Ventana deslizante en memoria: como mucho `limit` eventos por `window` segundos y clave."""
-
-    def __init__(self, limit: int, window: float):
-        self.limit, self.window = limit, window
-        self.hits: dict[str, deque] = {}
-
-    def allow(self, key: str) -> bool:
-        now = time.monotonic()
-        q = self.hits.setdefault(key, deque())
-        while q and now - q[0] > self.window:
-            q.popleft()
-        if len(q) >= self.limit:
-            return False
-        q.append(now)
-        if len(self.hits) > 10_000:       # evita que el diccionario crezca sin límite: se podan las claves ya caducadas
-            self.hits = {k: v for k, v in self.hits.items() if v and now - v[-1] <= self.window}
-        return True
 
 
 def _clean(text: str, limit: int = 300) -> str:
@@ -236,6 +217,12 @@ def create_app(
         _cookie(resp, authmod.STATE_COOKIE, authmod.sign(cfg, "state", state), authmod.STATE_TTL)
         return resp
 
+    def run_admin_probe(token: str, uid: int, login: str) -> None:
+        try:
+            probemod.save_probe(cfg.probe_dir, login, probemod.run_probe(token, uid, http, app_client()))
+        except Exception as e:  # nunca debe afectar al login, pero tampoco fallar en silencio
+            log.warning("sondeo de administrador falló (%s)", type(e).__name__)
+
     def finish_login(request: Request, code: str | None, state: str | None, error: str | None):
         if not cfg.enabled:
             return JSONResponse({"detail": "El login con 42 aún no está configurado."}, status_code=503)
@@ -261,11 +248,8 @@ def create_app(
         if not known:       # solo alumnos del campus que ya están en nuestros datos
             return _fail("fuera-de-campus")
         if me["login"] in cfg.admin_logins and cfg.probe_dir:
-            try:
-                results = probemod.run_probe(token, me["id"], http, app_client())
-                probemod.save_probe(cfg.probe_dir, me["login"], results)
-            except Exception as e:  # el sondeo nunca debe impedir entrar, pero tampoco fallar en silencio
-                log.warning("sondeo de administrador falló (%s)", type(e).__name__)
+            # En segundo plano y espaciado: ~20 llamadas seguidas agotaban el límite de 42 y hacían fallar otros logins.
+            threading.Thread(target=run_admin_probe, args=(token, me["id"], me["login"]), daemon=True).start()
         resp = RedirectResponse("/me", status_code=302)
         resp.delete_cookie(authmod.STATE_COOKIE, path="/")
         name = me.get("usual_first_name") or me.get("first_name") or me["login"]

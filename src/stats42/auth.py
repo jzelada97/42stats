@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import secrets
+import time
 from dataclasses import dataclass
 from urllib.parse import urlencode
 
@@ -16,6 +17,12 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 AUTHORIZE_URL = "https://api.intra.42.fr/oauth/authorize"
 TOKEN_URL = "https://api.intra.42.fr/oauth/token"
 ME_URL = "https://api.intra.42.fr/v2/me"
+
+# 42 limita la aplicación a 2 peticiones por segundo (el límite es de TODA la aplicación, no por alumno).
+_sleep = time.sleep
+RETRIES = 4
+RETRY_PAUSE = 0.6        # separa el canje del código de la lectura de /v2/me
+RETRY_AFTER_MAX = 5.0
 
 SESSION_COOKIE = "stats42_session"
 STATE_COOKIE = "stats42_state"
@@ -89,9 +96,23 @@ def authorize_url(cfg: AuthConfig, state: str) -> str:
     })
 
 
+def _send(http: httpx.Client, method: str, url: str, **kw) -> httpx.Response:
+    """Pide a 42 y, si responde 429 (límite de ritmo), espera lo que indique y reintenta."""
+    for attempt in range(RETRIES):
+        r = http.request(method, url, **kw)
+        if r.status_code != 429 or attempt == RETRIES - 1:
+            return r
+        try:
+            wait = min(float(r.headers.get("Retry-After", 1)), RETRY_AFTER_MAX)
+        except ValueError:
+            wait = 1.0
+        _sleep(max(wait, RETRY_PAUSE))
+    return r  # pragma: no cover
+
+
 def exchange_code(cfg: AuthConfig, code: str, http: httpx.Client) -> str:
     """Cambia el código por un token de acceso. Lanza httpx.HTTPError si 42 lo rechaza."""
-    r = http.post(TOKEN_URL, data={
+    r = _send(http, "POST", TOKEN_URL, data={
         "grant_type": "authorization_code", "client_id": cfg.uid, "client_secret": cfg.secret,
         "code": code, "redirect_uri": cfg.redirect_uri,
     })
@@ -100,6 +121,7 @@ def exchange_code(cfg: AuthConfig, code: str, http: httpx.Client) -> str:
 
 
 def fetch_me(token: str, http: httpx.Client) -> dict:
-    r = http.get(ME_URL, headers={"Authorization": f"Bearer {token}"})
+    _sleep(RETRY_PAUSE)     # no pegar esta llamada a la del canje: caben 2 por segundo en toda la aplicación
+    r = _send(http, "GET", ME_URL, headers={"Authorization": f"Bearer {token}"})
     r.raise_for_status()
     return r.json()

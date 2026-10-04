@@ -1,4 +1,5 @@
 import json
+import time
 from urllib.parse import parse_qs, parse_qsl, urlparse
 
 import httpx
@@ -213,7 +214,10 @@ def test_probe_is_written_only_for_admins_and_never_blocks_login(engine, tmp_pat
     cfg = authmod.AuthConfig(**{**CFG.__dict__, "admin_logins": frozenset({"u12"}), "probe_dir": str(tmp_path)})
     c = TestClient(create_app(engine, 21, auth=cfg, http=shared, app_client=lambda: app), follow_redirects=False,
                    base_url="https://42madrid.example")
-    assert login(c).headers["location"] == "/me"
+    assert login(c).headers["location"] == "/me"                       # el login no espera al sondeo
+    deadline = time.monotonic() + 5
+    while not (tmp_path / "probe-u12.json").exists() and time.monotonic() < deadline:
+        time.sleep(0.05)                                                # el sondeo corre en segundo plano
     assert (tmp_path / "probe-u12.json").exists()
     assert "tok-user" not in (tmp_path / "probe-u12.json").read_text()
 
@@ -222,6 +226,7 @@ def test_probe_is_written_only_for_admins_and_never_blocks_login(engine, tmp_pat
     c2 = TestClient(create_app(engine, 21, auth=other, http=shared, app_client=lambda: app), follow_redirects=False,
                     base_url="https://42madrid.example")
     login(c2)
+    time.sleep(0.3)
     assert not list((tmp_path / "otro").iterdir())      # un alumno normal no dispara el sondeo
 
 
@@ -326,3 +331,66 @@ def test_settings_reject_requests_from_another_origin(engine):
     r = c.post("/api/me/settings", json={"deadline": str(TODAY + timedelta(days=30))}, headers={"Origin": "https://evil.example"})
     assert r.status_code == 403
     assert c.get("/api/me").json()["self_reported"]["deadline"] is None
+
+
+# ---------------------------------------------------------------- límite de ritmo de 42 durante el login
+
+def fake_42_rate_limited(failures_on_me=0, failures_on_token=0, retry_after="0"):
+    """42 responde 429 las primeras N veces en /v2/me y en /oauth/token, como pasó en producción."""
+    calls = {"me": 0, "token": 0}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/oauth/token":
+            calls["token"] += 1
+            if calls["token"] <= failures_on_token:
+                return httpx.Response(429, headers={"Retry-After": retry_after}, text="429 Too Many Requests (Spam Rate Limit Exceeded)")
+            return httpx.Response(200, json={"access_token": "tok-user"})
+        if req.url.path == "/v2/me":
+            calls["me"] += 1
+            if calls["me"] <= failures_on_me:
+                return httpx.Response(429, headers={"Retry-After": retry_after}, text="429 Too Many Requests (Spam Rate Limit Exceeded)")
+            return httpx.Response(200, json={"id": 12, "login": "u12", "usual_first_name": "Ada"})
+        return httpx.Response(404)
+
+    return httpx.Client(transport=httpx.MockTransport(handler)), calls
+
+
+def client_with(engine, http):
+    store = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
+    return TestClient(create_app(engine, 21, auth=CFG, http=http, settings_engine=store), follow_redirects=False,
+                      base_url="https://42madrid.example")
+
+
+def test_login_survives_42_rate_limiting_on_me_and_on_token(engine, monkeypatch):
+    waits = []
+    monkeypatch.setattr(authmod, "_sleep", waits.append)
+    http, calls = fake_42_rate_limited(failures_on_me=2, failures_on_token=1, retry_after="2")
+    c = client_with(engine, http)
+    assert login(c).headers["location"] == "/me"                       # 42 acabó contestando: el alumno entra
+    assert calls == {"me": 3, "token": 2}
+    assert 2.0 in waits and authmod.RETRY_PAUSE in waits                 # respetó el Retry-After y separó las dos llamadas
+
+
+def test_login_waits_between_the_token_exchange_and_reading_me(engine, monkeypatch):
+    waits = []
+    monkeypatch.setattr(authmod, "_sleep", waits.append)
+    http, _ = fake_42_rate_limited()
+    login(client_with(engine, http))
+    assert waits == [authmod.RETRY_PAUSE]                                # una pausa fija, sin reintentos
+
+
+def test_login_gives_up_after_a_few_retries_and_logs_the_429(engine, caplog):
+    http, calls = fake_42_rate_limited(failures_on_me=99)
+    c = client_with(engine, http)
+    with caplog.at_level("WARNING", logger="stats42.auth"):
+        r = login(c)
+    assert r.headers["location"] == "/login?error=intercambio" and calls["me"] == authmod.RETRIES
+    assert "429" in " ".join(rec.getMessage() for rec in caplog.records) and authmod.SESSION_COOKIE not in c.cookies
+
+
+def test_retry_after_is_capped_so_a_slow_42_cannot_hang_a_worker(engine, monkeypatch):
+    waits = []
+    monkeypatch.setattr(authmod, "_sleep", waits.append)
+    http, _ = fake_42_rate_limited(failures_on_me=1, retry_after="3600")
+    login(client_with(engine, http))
+    assert max(waits) == authmod.RETRY_AFTER_MAX
