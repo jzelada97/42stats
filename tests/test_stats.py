@@ -225,8 +225,11 @@ def test_index_and_static_assets_served():
     web = TestClient(create_app(create_engine("sqlite://"), 21))
     r = web.get("/")
     assert r.status_code == 200 and "42" in r.text
-    assert r.text.count("<script") == 1 and 'src="/static/app.js"' in r.text  # sin JS inline (la CSP lo bloquea)
-    for asset in ("/static/app.js", "/static/style.css"):
+    assert r.text.count("<script") == r.text.count('<script src="/static/')  # sin JS inline (la CSP lo bloquea)
+    for page in ("/login",):
+        t = web.get(page).text
+        assert t.count("<script") == t.count('<script src="/static/'), page
+    for asset in ("/static/app.js", "/static/charts.js", "/static/me.js", "/static/login.js", "/static/style.css"):
         assert web.get(asset).status_code == 200, asset
 
 

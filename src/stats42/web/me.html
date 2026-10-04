@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mi panel · 42 Madrid</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232a78d6'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='16' font-weight='700' text-anchor='middle' fill='white'%3E42%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="bar">
+  <div class="bar-in">
+    <a class="brand" href="/">42 Madrid<small>/ mi panel</small></a>
+    <nav aria-label="Secciones">
+      <a href="/">Estadísticas del campus</a>
+      <a href="/auth/logout">Salir</a>
+    </nav>
+    <a id="auth-link" class="auth-link" href="/me">Mi panel</a>
+    <button id="theme" type="button" aria-label="Cambiar tema">auto</button>
+  </div>
+</header>
+
+<main>
+  <section aria-labelledby="h-me">
+    <div>
+      <div class="kicker" id="me-kicker">mi panel</div>
+      <h2 id="h-me">Cómo vas</h2>
+      <p class="updated" id="me-sub">cargando…</p>
+    </div>
+
+    <div class="card raise status" id="status" data-state="none">
+      <div class="status-main">
+        <span class="chip" id="status-chip">…</span>
+        <p id="status-summary" class="lead"></p>
+      </div>
+      <div class="tiles" id="facts"></div>
+    </div>
+
+    <div class="signals" id="signals"></div>
+
+    <div class="card" id="tips-card" hidden>
+      <h3>Qué puedes hacer esta semana</h3>
+      <ul class="tips" id="tips"></ul>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-ms">
+    <div><div class="kicker">42cursus / milestones</div><h2 id="h-ms">Tus milestones</h2></div>
+    <div class="grid2">
+      <div class="card"><h3>Common Core Rank</h3><p class="sub">Fecha de cada rank y días desde el anterior.</p><ol class="tl" id="timeline"></ol></div>
+      <div class="card">
+        <h3>Tu nivel frente a tu cursus</h3>
+        <p class="sub" id="level-sub">Alumnos con el cursus abierto por nivel; tu columna aparece marcada.</p>
+        <div class="chart" id="level-chart"></div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-act">
+    <div><div class="kicker">campus / actividad</div><h2 id="h-act">Tu actividad</h2></div>
+    <div class="grid2">
+      <div class="card"><h3>Horas por semana</h3><p class="sub">Sesiones de ordenador en el campus, últimas 12 semanas.</p>
+        <div class="chart" id="weekly"></div>
+        <details><summary>Ver como tabla</summary><div class="wrap" id="weekly-table"></div></details></div>
+      <div class="card"><h3>Proyectos y evaluaciones</h3><div id="work"></div></div>
+    </div>
+  </section>
+
+  <footer>
+    Solo tú ves esta página: depende de tu sesión de 42 y no se comparte con nadie. Las comparaciones usan datos agregados de tu cursus.
+    La fecha de blackhole que devuelve la API pública es orientativa y puede no coincidir con tu deadline real.
+    <span id="bh-note"></span>
+  </footer>
+</main>
+<div id="tip" role="tooltip"></div>
+<script src="/static/charts.js"></script>
+<script src="/static/me.js"></script>
+</body>
+</html>

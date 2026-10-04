@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entrar con 42 · estadísticas</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232a78d6'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='16' font-weight='700' text-anchor='middle' fill='white'%3E42%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="bar">
+  <div class="bar-in">
+    <a class="brand" href="/">42 Madrid<small>/ campus 22</small></a>
+    <nav aria-label="Secciones"><a href="/">Estadísticas del campus</a></nav>
+    <button id="theme" type="button" aria-label="Cambiar tema">auto</button>
+  </div>
+</header>
+
+<main class="login-wrap">
+  <section class="login-card card raise" aria-labelledby="h-login">
+    <div class="kicker">$ ft login</div>
+    <h1 id="h-login">Tu panel personal</h1>
+    <p class="lead">Entra con tu cuenta de 42 y verás cómo vas frente a tu promoción, con consejos para la semana.</p>
+
+    <div class="login-error" id="error" role="alert" hidden></div>
+
+    <a class="btn" id="login-btn" href="/auth/login">Entrar con 42</a>
+    <p class="sub" id="disabled" hidden>El login todavía no está activado en este servidor.</p>
+
+    <ul class="login-points">
+      <li><b>Qué verás:</b> tu rank y tus milestones, cuánto llevas sin validar uno, tu actividad en el campus y cómo estás frente a tu cursus.</li>
+      <li><b>Qué usamos:</b> solo tu perfil público de 42 (permiso <span class="mono">public</span>). No pedimos tu contraseña: la escribes en 42, no aquí.</li>
+      <li><b>Qué guardamos:</b> una cookie de sesión con tu login. <b>No guardamos tu token.</b> Solo tú ves tus datos.</li>
+      <li><b>Qué no vemos:</b> tu deadline de milestone y tu freeze no están en la API pública de 42, así que no podemos mostrarlos todavía.</li>
+    </ul>
+  </section>
+</main>
+
+<script src="/static/charts.js"></script>
+<script src="/static/login.js"></script>
+</body>
+</html>
