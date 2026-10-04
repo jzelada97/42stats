@@ -86,6 +86,14 @@ function renderMilestones(m) {
     : empty(["rank-steps"], waiting);
 }
 
+function renderHabits(h) {
+  if (!h.quartiles.length) return empty(["habits-chart"], "Aún no hay suficientes alumnos para comparar hábitos.");
+  const short = ["Más lento", "Medio-lento", "Medio-rápido", "Más rápido"];
+  columns($("habits-chart"), h.quartiles.map((q, i) => ({ label: short[i], full: q.label, value: q.median_hours_30d })), {
+    labelEvery: 1, tip: (x) => `${esc(x.full)}: mediana <b>${fmt1(x.value)} h</b> en 30 días`,
+  });
+}
+
 function renderAttendance(a) {
   const ids = ["heatmap", "daily", "durations", "seatmap"];
   if (!a.sessions) { $("att-tiles").innerHTML = ""; return empty(ids, "Aún no hay sesiones: la carga del histórico sigue en curso."); }
@@ -201,6 +209,7 @@ load("/api/levels", renderLevels, ["levels"]);
 load("/api/signups", renderSignups, ["signups"]);
 load("/api/cohorts", renderCohorts, ["cohorts"]);
 load("/api/milestones", renderMilestones, ["rank-dist", "rank-stalled", "rank-steps"]);
+load("/api/habits", renderHabits, ["habits-chart"]);
 get("/api/blackholes").then((b) => { renderBlackholes(b); renderBlackholeHistory(b); })
   .catch((e) => empty(["blackholes", "bh-history"], `No se pudieron cargar estos datos (${esc(e.message)}).`));
 load("/api/attendance", renderAttendance, ["heatmap", "daily", "durations", "seatmap"]);

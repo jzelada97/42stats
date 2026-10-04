@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ayuda entre alumnos · 42 Madrid</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232a78d6'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='16' font-weight='700' text-anchor='middle' fill='white'%3E42%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="bar">
+  <div class="bar-in">
+    <a class="brand" href="/">42 Madrid<small>/ ayuda</small></a>
+    <nav aria-label="Secciones">
+      <a href="/me">Mi panel</a>
+      <a href="/campus">Campus</a>
+      <a href="#recursos">Recursos</a>
+      <a href="#mentoria">Mentoría</a>
+      <a href="#pedir">Pedir ayuda</a>
+    </nav>
+    <a id="auth-link" class="auth-link" href="/me">Mi panel</a>
+    <button id="theme" type="button" aria-label="Cambiar tema">auto</button>
+  </div>
+</header>
+
+<main>
+  <section aria-labelledby="h-ayuda">
+    <div>
+      <div class="kicker">comunidad / ayuda entre alumnos</div>
+      <h2 id="h-ayuda">Aprender juntos, sin copiar</h2>
+      <p class="lead">Recursos para estudiar, alumnos que ya pasaron cada proyecto y un sitio para pedir ayuda.</p>
+    </div>
+    <div class="notice-rule" role="note">
+      <b>Una regla que no se negocia:</b> en 42, compartir o copiar la solución de un proyecto cuenta como <b>cheating</b>.
+      Aquí ayudar es <b>explicar</b> conceptos, depurar con preguntas y orientar. <b>Nunca</b> pasar código ni enlaces a soluciones.
+      Los recursos se revisan antes de publicarse.
+    </div>
+  </section>
+
+  <!-- ======================= RECURSOS ======================= -->
+  <section id="recursos" aria-labelledby="h-rec">
+    <div><div class="kicker">estudiar</div><h2 id="h-rec">Recursos de estudio</h2>
+      <p class="sub">Guías, documentación, vídeos y herramientas que explican el tema. Aprobados a mano.</p></div>
+    <div class="card">
+      <div class="tools">
+        <label class="inline" for="res-project">Proyecto <select id="res-project"></select></label>
+      </div>
+      <ul class="list res" id="res-list"></ul>
+    </div>
+    <div class="card" id="res-pending-card" hidden>
+      <h3>Tus envíos pendientes</h3>
+      <ul class="list plain" id="res-pending"></ul>
+    </div>
+    <details class="card">
+      <summary class="h3like">Proponer un recurso</summary>
+      <form id="res-form" class="stack" novalidate>
+        <label for="rf-project">Proyecto <select id="rf-project"></select></label>
+        <label for="rf-title">Título <input id="rf-title" type="text" maxlength="120" placeholder="Guía de punteros en C" required></label>
+        <label for="rf-url">Enlace (https) <input id="rf-url" type="url" maxlength="300" placeholder="https://…" required></label>
+        <label for="rf-kind">Tipo <select id="rf-kind">
+          <option value="guía">Guía o tutorial</option><option value="documentación">Documentación</option>
+          <option value="vídeo">Vídeo</option><option value="herramienta">Herramienta</option><option value="otro">Otro</option></select></label>
+        <label class="check" for="rf-confirm"><input id="rf-confirm" type="checkbox">
+          Confirmo que explica el tema y <b>no contiene la solución</b> del proyecto.</label>
+        <div class="row"><button class="btn small" type="submit">Enviar a revisión</button><span class="sub" id="rf-msg" role="status"></span></div>
+      </form>
+    </details>
+  </section>
+
+  <!-- ======================= MENTORÍA ======================= -->
+  <section id="mentoria" aria-labelledby="h-men">
+    <div><div class="kicker">mentoría</div><h2 id="h-men">Alumnos que ya lo pasaron</h2>
+      <p class="sub">Solo aparecen quienes, según nuestros datos, tienen el proyecto validado.</p></div>
+    <div class="grid2">
+      <div class="card">
+        <h3>Mentores disponibles</h3>
+        <label class="inline" for="mentor-project">Proyecto <select id="mentor-project"></select></label>
+        <ul class="list mentors" id="mentor-list"></ul>
+      </div>
+      <div class="card">
+        <h3>Ofrecer ayuda</h3>
+        <p class="sub">Elige entre los proyectos que ya tienes validados. Otros alumnos podrán ver tu login, tu nivel y tu nota en ese proyecto.</p>
+        <form id="offer-form" class="stack" novalidate>
+          <fieldset class="checks" id="offer-projects"><legend class="sub">Tus proyectos validados</legend></fieldset>
+          <label for="offer-note">Nota (opcional, 200 caracteres) <input id="offer-note" type="text" maxlength="200" placeholder="Disponible por las tardes, explico punteros"></label>
+          <label class="check" for="offer-active"><input id="offer-active" type="checkbox" checked> Mostrarme como mentor</label>
+          <div class="row"><button class="btn small" type="submit">Guardar</button><span class="sub" id="offer-msg" role="status"></span></div>
+        </form>
+      </div>
+    </div>
+    <div class="card" id="incoming-card" hidden>
+      <h3>Piden ayuda en lo que tú validaste</h3>
+      <ul class="list requests" id="incoming"></ul>
+    </div>
+  </section>
+
+  <!-- ======================= PEDIR AYUDA ======================= -->
+  <section id="pedir" aria-labelledby="h-ped">
+    <div><div class="kicker">pedir ayuda</div><h2 id="h-ped">¿Estás atascado?</h2>
+      <p class="sub">Describe qué has probado y qué no entiendes. Hasta 3 peticiones abiertas; caducan a los 30 días.</p></div>
+    <div class="grid2">
+      <div class="card">
+        <form id="req-form" class="stack" novalidate>
+          <label for="req-project">Proyecto <select id="req-project"></select></label>
+          <label for="req-message">Tu pregunta <textarea id="req-message" rows="4" maxlength="280"
+            placeholder="Llevo 3 días con get_next_line: no entiendo por qué se pierde el resto del buffer entre llamadas."></textarea></label>
+          <div class="row"><span class="sub" id="req-count">0 / 280</span></div>
+          <div class="row"><button class="btn small" type="submit">Pedir ayuda</button><span class="sub" id="req-msg" role="status"></span></div>
+        </form>
+      </div>
+      <div class="card"><h3>Tus peticiones</h3><ul class="list requests" id="my-requests"></ul></div>
+    </div>
+  </section>
+
+  <!-- ======================= MODERACIÓN ======================= -->
+  <section id="moderacion" aria-labelledby="h-mod" hidden>
+    <div><div class="kicker">administración</div><h2 id="h-mod">Recursos pendientes de revisar</h2></div>
+    <div class="card"><ul class="list res" id="pending-list"></ul><p class="sub" id="mod-msg" role="status"></p></div>
+  </section>
+
+  <footer>
+    Para contactar con un mentor usa su perfil de 42 o el canal habitual del campus: esta web no envía mensajes.
+    Si ves algo que incumple las normas, avisa al staff. Los datos de mentoría y peticiones solo los ven alumnos con sesión.
+  </footer>
+</main>
+<div id="tip" role="tooltip"></div>
+<script src="/static/charts.js"></script>
+<script src="/static/ayuda.js"></script>
+</body>
+</html>

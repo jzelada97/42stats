@@ -337,3 +337,15 @@ def test_habits_endpoint_is_for_members_only_and_aggregated(engine, store):
     assert anon.get("/api/habits").status_code == 401
     r = user(engine, store, 15).get("/api/habits")
     assert r.status_code == 200 and r.json()["quartiles"] == []            # cohorte demasiado pequeña en el test: sin cifras
+
+
+def test_help_page_is_for_members_only_and_has_no_inline_scripts(engine, store):
+    anon, _ = make_client(engine, settings_engine=store)
+    r = anon.get("/ayuda")
+    assert r.status_code == 302 and r.headers["location"] == "/login"
+    c = user(engine, store, 15)
+    page = c.get("/ayuda")
+    assert page.status_code == 200 and page.headers["cache-control"] == "no-store"
+    assert page.text.count("<script") == page.text.count('<script src="/static/')
+    assert "Aprender juntos, sin copiar" in page.text and "cheating" in page.text         # la regla de no copiar, siempre visible
+    assert c.get("/static/ayuda.js").status_code == 200

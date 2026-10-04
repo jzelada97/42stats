@@ -28,7 +28,7 @@ def test_every_risky_interpolation_is_escaped_or_numeric():
         src = f.read_text(encoding="utf-8")
         lines = src.splitlines()
         for n, expr in interpolations(src):
-            if "textContent" in lines[n - 1]:      # asignar a textContent es seguro: el navegador no interpreta HTML
+            if any("textContent" in lines[i] for i in range(max(0, n - 3), n)):   # asignar a textContent es seguro (puede ocupar varias líneas)
                 continue
             if RISKY.search(expr) and not any(w in expr for w in SAFE_WRAPPERS):
                 offenders.append(f"{f.name}:{n}: ${{{expr}}}")
@@ -56,3 +56,15 @@ def test_js_never_uses_dangerous_sinks():
         src = f.read_text(encoding="utf-8")
         for bad in ("eval(", "new Function", "document.write", "setTimeout(\"", "setInterval(\""):
             assert bad not in src, f"{f.name}: usa {bad}"
+
+
+def test_user_generated_pages_never_use_innerhtml_and_only_assign_validated_links():
+    """La página de ayuda pinta texto de otros alumnos: solo con nodos de texto, y los enlaces solo tras validarlos."""
+    src = (WEB / "ayuda.js").read_text(encoding="utf-8")
+    assert "innerHTML" not in src and "insertAdjacentHTML" not in src and "outerHTML" not in src
+    for f in JS_FILES:
+        for n, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+            if re.search(r"\.href\s*=", line):
+                assert any(ok in line for ok in ("safeUrl(", "profileUrl(", 'u)', '"/', "`/")), f"{f.name}:{n}: href sin validar: {line.strip()}"
+    helpers = (WEB / "charts.js").read_text(encoding="utf-8")
+    assert 'x.protocol === "https:"' in helpers and "x.username" in helpers                  # safeUrl exige https y rechaza credenciales

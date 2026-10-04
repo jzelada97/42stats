@@ -218,3 +218,27 @@ footer a { color: var(--ink-2); }
 .btn.small { font-size: 13px; padding: 8px 16px; border-radius: 8px; }
 .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--axis); }
 .status[data-state="frozen"] .chip { border-color: var(--accent); color: var(--accent-ink); }
+
+/* ---- ayuda entre alumnos ---- */
+.notice-rule { padding: 12px 16px; border: 1px solid var(--border); border-left: 3px solid var(--warn); border-radius: 8px; background: var(--surface); font-size: 14px; color: var(--ink-2); }
+.notice-rule b { color: var(--ink); }
+.stack { display: grid; gap: 12px; margin-top: 10px; }
+.stack label { display: grid; gap: 4px; font-size: 13px; color: var(--ink-2); }
+.stack input[type="text"], .stack input[type="url"], .stack select, .stack textarea, label.inline select {
+  font: inherit; font-size: 14px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--page); color: var(--ink); width: 100%; min-width: 0; }
+label.inline { display: inline-grid; grid-auto-flow: column; gap: 8px; align-items: center; font-size: 13px; color: var(--ink-2); }
+label.inline select { width: auto; max-width: 100%; }
+.stack textarea { resize: vertical; }
+.stack label.check, label.check { display: flex; gap: 8px; align-items: baseline; color: var(--ink); }
+fieldset.checks { border: 1px solid var(--grid); border-radius: 8px; padding: 10px 12px; display: grid; gap: 6px; min-width: 0; }
+.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.h3like { font: 650 15px var(--sans); color: var(--ink); }
+.chip-kind { font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .04em; color: var(--ink-2); border: 1px solid var(--axis); border-radius: 999px; padding: 2px 8px; height: fit-content; white-space: nowrap; }
+.list.res li { grid-template-columns: auto 1fr auto; align-items: start; }
+.list.mentors li { grid-template-columns: 110px 1fr; }
+.list.requests li { grid-template-columns: 1fr auto; align-items: start; }
+.list .note { margin: 4px 0 0; font-size: 13px; color: var(--ink); overflow-wrap: anywhere; }
+.list li > div, .list .t { min-width: 0; overflow-wrap: anywhere; }
+.cta { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.proj .m a { color: var(--accent-ink); }
+@media (max-width: 760px) { .list.res li { grid-template-columns: 1fr; } .list.mentors li { grid-template-columns: 1fr; } .list.requests li { grid-template-columns: 1fr; } }

@@ -55,13 +55,30 @@ function renderMe(d) {
     <div class="tiles">${tiles([[fmt(p.validated_90d), "proyectos validados (90 días)"], [fmt(e.done_90d), "evaluaciones hechas (90 días)"],
       [e.correction_points == null ? "–" : fmt(e.correction_points), "puntos de corrección"]])}</div>
     <h3 class="mt">En curso ahora</h3>
-    ${p.in_progress.length ? `<ul class="list plain">${p.in_progress.map((x) => `<li><span class="t">${esc(x.name)}</span><span class="m">${x.days == null ? "" : `desde hace ${fmt(x.days)} días`}</span></li>`).join("")}</ul>`
+    ${p.in_progress.length ? `<ul class="list plain">${p.in_progress.map((x) => `<li class="proj"><div><span class="t">${esc(x.name)}</span> <span class="m">${x.days == null ? "" : `desde hace ${fmt(x.days)} días`}</span>`
+        + (x.context ? `<div class="m">Lo habitual: validarlo en ${x.context.median_days == null ? "–" : fmt1(x.context.median_days)} días · lo valida el ${pct(x.context.validation_rate)} · nota media ${fmt1(x.context.avg_mark)}</div>` : "")
+        + `<div class="m"><a href="/ayuda?project=${Number(x.id)}#recursos">${fmt(x.resources)} recursos</a> · <a href="/ayuda?project=${Number(x.id)}#mentoria">${fmt(x.mentors)} mentores</a> · <a href="/ayuda?project=${Number(x.id)}#pedir">Pedir ayuda</a></div></div></li>`).join("")}</ul>`
       : `<p class="sub">No tienes proyectos en curso.</p>`}`;
 
+  renderHabits(d.habits);
   const sr = d.self_reported || {};
   document.getElementById("deadline").value = sr.deadline || "";
   document.getElementById("freeze").value = sr.freeze_until || "";
   document.getElementById("bh-note").textContent = d.blackhole_api ? ` Fecha de blackhole según la API: ${d.blackhole_api}.` : "";
+}
+
+function renderHabits(hb) {
+  const card = document.getElementById("habits-card");
+  card.hidden = !hb;
+  if (!hb) return;
+  const short = ["Más lento", "Medio-lento", "Medio-rápido", "Más rápido"];
+  const mine = hb.mine ? hb.mine.quartile : null;
+  columns(document.getElementById("habits-chart"), hb.quartiles.map((q, i) => ({ label: short[i], full: q.label, value: q.median_hours_30d, hi: i === mine })), {
+    labelEvery: 1, tip: (x) => `${esc(x.full)}: mediana <b>${fmt1(x.value)} h</b> en 30 días`,
+  });
+  document.getElementById("habits-sub").textContent = (hb.mine
+    ? `Estás en el grupo «${hb.quartiles[hb.mine.quartile].label.toLowerCase()}» de ${fmt(hb.students)} alumnos y llevas ${fmt1(hb.mine.hours_30d)} h en 30 días. `
+    : "") + "Es una correlación entre horas y ritmo: no demuestra que más horas den más nivel, pero sirve de referencia.";
 }
 
 function loadMe() {

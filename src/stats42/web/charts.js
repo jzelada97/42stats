@@ -184,6 +184,16 @@ const empty = (ids, msg) => ids.forEach((id) => { const e = $(id); if (e) e.inne
 const waiting = "Aún no hay datos: la carga inicial sigue en curso.";
 
 
+/** Solo https público y sin credenciales: los enlaces que escribe otro alumno nunca se pintan sin pasar por aquí. */
+const safeUrl = (u) => {
+  try {
+    const x = new URL(u);
+    return x.protocol === "https:" && !x.username && !x.password ? x.href : "";
+  } catch (_) { return ""; }
+};
+const LOGIN_RE = /^[a-z0-9][a-z0-9_-]{1,29}$/i;
+const profileUrl = (login) => (LOGIN_RE.test(login || "") ? `https://profile.intra.42.fr/users/${login}` : "");
+
 /* ---------------------------------------------------------------- sesión y tema (comunes a todas las páginas) */
 (function initShared() {
   const MODES = ["auto", "light", "dark"], LABELS = { auto: "tema: auto", light: "tema: claro", dark: "tema: oscuro" };
