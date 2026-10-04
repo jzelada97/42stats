@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
+from collections import deque
 from collections.abc import Callable, Iterator
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -27,7 +29,35 @@ from .db import User, UserSetting, make_engine, make_readonly_engine
 log = logging.getLogger("stats42.auth")
 WEB_DIR = Path(__file__).parent / "web"
 PRIVATE_PATHS = {"/", "/api/me", "/api/session", "/me", "/login"}
-CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:"
+# Sin scripts inline ni conexiones a otros sitios; nadie puede enmarcar la web (clickjacking) ni cambiar <base>.
+CSP = ("default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; "
+       "frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'")
+MAX_BODY = 2048          # los POST de esta web son un par de fechas: cualquier cosa mayor es un abuso
+
+
+class RateLimiter:
+    """Ventana deslizante en memoria: como mucho `limit` eventos por `window` segundos y clave."""
+
+    def __init__(self, limit: int, window: float):
+        self.limit, self.window = limit, window
+        self.hits: dict[str, deque] = {}
+
+    def allow(self, key: str) -> bool:
+        now = time.monotonic()
+        q = self.hits.setdefault(key, deque())
+        while q and now - q[0] > self.window:
+            q.popleft()
+        if len(q) >= self.limit:
+            return False
+        q.append(now)
+        if len(self.hits) > 10_000:       # evita que el diccionario crezca sin límite: se podan las claves ya caducadas
+            self.hits = {k: v for k, v in self.hits.items() if v and now - v[-1] <= self.window}
+        return True
+
+
+def _clean(text: str, limit: int = 300) -> str:
+    """Texto externo para un log: sin saltos de línea ni caracteres de control (evita falsificar líneas de log)."""
+    return re.sub(r"[\x00-\x1f\x7f]+", " ", text)[:limit]
 
 # TTL en segundos por consulta: las pesadas se recalculan poco; los datos cambian una vez al día.
 TTL = {"overview": 60, "levels": 300, "cohorts": 300, "signups": 600, "projects": 600,
@@ -55,6 +85,24 @@ def create_app(
     app = FastAPI(title="42stats", docs_url=None, redoc_url=None, openapi_url=None)
     cache: dict[str, tuple[float, Any]] = {}
     store: dict[str, Engine] = {}
+    auth_limiter = RateLimiter(30, 60)        # por IP: intentos de login y callbacks
+    settings_limiter = RateLimiter(20, 60)    # por alumno: guardados de deadline y freeze
+
+    def client_ip(request: Request) -> str:
+        return request.client.host if request.client else "?"
+
+    def guard_body(request: Request):
+        """Los POST solo aceptan JSON pequeño: además de limitar abusos, un Content-Type JSON obliga a otros sitios a un preflight CORS."""
+        if request.method not in ("POST", "PUT", "PATCH"):
+            return None
+        if not request.headers.get("content-type", "").lower().startswith("application/json"):
+            return JSONResponse({"detail": "Se esperaba JSON."}, status_code=415)
+        length = request.headers.get("content-length", "")
+        if not length.isdigit():
+            return JSONResponse({"detail": "Falta Content-Length."}, status_code=411)
+        if int(length) > MAX_BODY:
+            return JSONResponse({"detail": "Cuerpo demasiado grande."}, status_code=413)
+        return None
 
     def settings_db() -> Engine:
         """Base aparte (escribible) con lo que indica cada alumno; se crea al primer uso."""
@@ -82,8 +130,13 @@ def create_app(
 
     @app.middleware("http")
     async def _headers(request: Request, call_next):
-        resp = await call_next(request)
+        resp = guard_body(request) or await call_next(request)
         resp.headers["X-Content-Type-Options"] = "nosniff"
+        resp.headers["X-Frame-Options"] = "DENY"
+        resp.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        resp.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()"
+        if cfg.secure_cookies:
+            resp.headers["Strict-Transport-Security"] = "max-age=31536000"   # sin includeSubDomains: otros proyectos comparten dominio
         resp.headers["Referrer-Policy"] = "no-referrer"
         resp.headers["Content-Security-Policy"] = CSP
         path = request.url.path
@@ -163,9 +216,11 @@ def create_app(
                 "name": u.get("name") if u else None}
 
     @app.get("/auth/login")
-    def auth_login():
+    def auth_login(request: Request):
         if not cfg.enabled:
             return JSONResponse({"detail": "El login con 42 aún no está configurado."}, status_code=503)
+        if not auth_limiter.allow(client_ip(request)):
+            return _fail("limite")
         state = authmod.new_state()
         resp = RedirectResponse(authmod.authorize_url(cfg, state), status_code=302)
         _cookie(resp, authmod.STATE_COOKIE, authmod.sign(cfg, "state", state), authmod.STATE_TTL)
@@ -174,6 +229,8 @@ def create_app(
     def finish_login(request: Request, code: str | None, state: str | None, error: str | None):
         if not cfg.enabled:
             return JSONResponse({"detail": "El login con 42 aún no está configurado."}, status_code=503)
+        if not auth_limiter.allow(client_ip(request)):
+            return _fail("limite")
         if error:
             return _fail("denegado")
         expected = authmod.unsign(cfg, "state", request.cookies.get(authmod.STATE_COOKIE), authmod.STATE_TTL)
@@ -184,10 +241,10 @@ def create_app(
             me = authmod.fetch_me(token, http)
         except httpx.HTTPStatusError as e:
             # El cuerpo de error de 42 no lleva secretos (p. ej. invalid_grant); el código y el token nunca se registran.
-            log.warning("login: 42 respondió %s en %s: %s", e.response.status_code, e.request.url.path, e.response.text[:300])
+            log.warning("login: 42 respondió %s en %s: %s", e.response.status_code, e.request.url.path, _clean(e.response.text))
             return _fail("intercambio")
         except (httpx.HTTPError, KeyError, ValueError) as e:
-            log.warning("login: fallo al hablar con 42 (%s): %s", type(e).__name__, e)
+            log.warning("login: fallo al hablar con 42 (%s): %s", type(e).__name__, _clean(str(e)))
             return _fail("intercambio")
         with Session(engine) as db:
             known = db.get(User, me["id"]) is not None
@@ -197,8 +254,8 @@ def create_app(
             try:
                 results = probemod.run_probe(token, me["id"], http, app_client())
                 probemod.save_probe(cfg.probe_dir, me["login"], results)
-            except Exception:  # el sondeo nunca debe impedir entrar
-                pass
+            except Exception as e:  # el sondeo nunca debe impedir entrar, pero tampoco fallar en silencio
+                log.warning("sondeo de administrador falló (%s)", type(e).__name__)
         resp = RedirectResponse("/me", status_code=302)
         resp.delete_cookie(authmod.STATE_COOKIE, path="/")
         name = me.get("usual_first_name") or me.get("first_name") or me["login"]
@@ -235,6 +292,9 @@ def create_app(
         u = current_user(request)
         if u is None:
             return JSONResponse({"detail": "Inicia sesión con 42."}, status_code=401)
+        if not settings_limiter.allow(str(u["uid"])):
+            return JSONResponse({"detail": "Demasiados cambios seguidos. Espera un minuto."}, status_code=429,
+                                headers={"Retry-After": "60"})
         origin = request.headers.get("origin")
         if origin and cfg.base_url and origin.rstrip("/") != cfg.base_url:   # defensa extra contra peticiones de otros sitios
             return JSONResponse({"detail": "Origen no permitido."}, status_code=403)

@@ -7,7 +7,7 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 COPY pyproject.toml ./
 COPY src ./src
-RUN pip install .
+RUN pip install --upgrade pip && pip install .
 
 # Usuario sin privilegios y volumen para la base de datos SQLite
 RUN useradd --system --uid 1000 app && mkdir /data && chown app /data

@@ -119,7 +119,7 @@ def audit(
 
 @app.command()
 def serve(
-    host: str = typer.Option("0.0.0.0", help="Dirección de escucha."),
+    host: str = typer.Option("0.0.0.0", help="Dirección de escucha."),  # nosec B104: en el contenedor; el puerto no se publica en el host
     port: int = typer.Option(8042, help="Puerto (dentro del contenedor; no se publica en el host)."),
 ) -> None:
     """Arranca la API y la web (solo lectura sobre la base de datos)."""
