@@ -24,7 +24,7 @@ function renderOverview(o) {
 
 function renderLevels(d) {
   if (!d.length) return empty(["levels"], waiting);
-  columns($("levels"), d.map((x) => ({ label: String(x.level), value: x.count })), { tip: (x) => `Nivel ${x.label}: <b>${fmt(x.value)}</b> alumnos`, labelEvery: 1 });
+  columns($("levels"), d.map((x) => ({ label: String(x.level), value: x.count })), { tip: (x) => `Nivel ${esc(x.label)}: <b>${fmt(x.value)}</b> alumnos`, labelEvery: 1 });
   $("levels-table").innerHTML = table(["Nivel", "Alumnos"], d.map((x) => [x.level, fmt(x.count)]));
 }
 
