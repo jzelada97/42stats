@@ -12,8 +12,8 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from fastapi import Depends, FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy.engine import Engine
@@ -28,7 +28,7 @@ from .db import User, UserSetting, make_engine, make_readonly_engine
 
 log = logging.getLogger("stats42.auth")
 WEB_DIR = Path(__file__).parent / "web"
-PRIVATE_PATHS = {"/", "/api/me", "/api/session", "/me", "/login"}
+PRIVATE_PATHS = {"/", "/api/me", "/api/session", "/me", "/login", "/campus"}
 # Sin scripts inline ni conexiones a otros sitios; nadie puede enmarcar la web (clickjacking) ni cambiar <base>.
 CSP = ("default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; "
        "frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'")
@@ -76,10 +76,14 @@ def create_app(
     http: httpx.Client | None = None,
     app_client: Callable[[], FortyTwoClient] | None = None,
     settings_engine: Engine | None = None,
+    require_login: bool | None = None,
 ) -> FastAPI:
     engine = engine or make_readonly_engine(os.environ.get("FT_DATABASE_URL", "sqlite:///data/stats42.db"))
     cursus_id = cursus_id or int(os.environ.get("FT_CURSUS_ID", "21"))
     cfg = auth or authmod.AuthConfig.from_env()
+    # Por defecto, las estadísticas del campus solo las ve quien se autenticó con 42 (FT_REQUIRE_LOGIN=0 para desarrollo).
+    if require_login is None:
+        require_login = os.environ.get("FT_REQUIRE_LOGIN", "1").lower() not in ("0", "false", "no")
     http = http or httpx.Client(timeout=30, headers={"User-Agent": "stats42/0.1"})
     app_client = app_client or (lambda: FortyTwoClient(cfg.uid, cfg.secret))
     app = FastAPI(title="42stats", docs_url=None, redoc_url=None, openapi_url=None)
@@ -124,6 +128,11 @@ def create_app(
         with Session(engine) as s:
             yield s
 
+    def member(request: Request) -> None:
+        """Las rutas de estadísticas solo responden a una sesión válida (alumno del campus que entró con 42)."""
+        if require_login and current_user(request) is None:
+            raise HTTPException(status_code=401, detail="Inicia sesión con 42 para ver las estadísticas.")
+
     @app.exception_handler(OperationalError)
     async def _no_data(_: Request, __: OperationalError) -> JSONResponse:
         return JSONResponse({"detail": "Datos aún no disponibles (sincronización en curso)."}, status_code=503)
@@ -133,6 +142,7 @@ def create_app(
         resp = guard_body(request) or await call_next(request)
         resp.headers["X-Content-Type-Options"] = "nosniff"
         resp.headers["X-Frame-Options"] = "DENY"
+        resp.headers["X-Robots-Tag"] = "noindex, nofollow"
         resp.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         resp.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()"
         if cfg.secure_cookies:
@@ -143,7 +153,7 @@ def create_app(
         if path in PRIVATE_PATHS or path.startswith("/auth/"):
             resp.headers["Cache-Control"] = "no-store"   # respuestas ligadas a una sesión: nunca se cachean
         elif path.startswith("/api/") and path != "/api/health":
-            resp.headers.setdefault("Cache-Control", "public, max-age=300")
+            resp.headers.setdefault("Cache-Control", "private, max-age=300")
         elif path.startswith("/static/"):
             resp.headers.setdefault("Cache-Control", "public, max-age=300")
         return resp
@@ -152,47 +162,47 @@ def create_app(
     def health() -> dict:
         return {"status": "ok"}
 
-    @app.get("/api/overview")
+    @app.get("/api/overview", dependencies=[Depends(member)])
     def overview(s: Session = Depends(session)) -> dict:
         return cached("overview", lambda: stats.overview(s, cursus_id))
 
-    @app.get("/api/levels")
+    @app.get("/api/levels", dependencies=[Depends(member)])
     def levels(s: Session = Depends(session)) -> list[dict]:
         return cached("levels", lambda: stats.levels(s, cursus_id))
 
-    @app.get("/api/cohorts")
+    @app.get("/api/cohorts", dependencies=[Depends(member)])
     def cohorts(s: Session = Depends(session)) -> list[dict]:
         return cached("cohorts", lambda: stats.cohorts(s, cursus_id))
 
-    @app.get("/api/blackholes")
+    @app.get("/api/blackholes", dependencies=[Depends(member)])
     def blackholes(s: Session = Depends(session)) -> dict:
         return cached("blackholes", lambda: stats.blackholes(s, cursus_id))
 
-    @app.get("/api/milestones")
+    @app.get("/api/milestones", dependencies=[Depends(member)])
     def milestones(s: Session = Depends(session)) -> dict:
         return cached("milestones", lambda: stats.milestones(s, cursus_id))
 
-    @app.get("/api/signups")
+    @app.get("/api/signups", dependencies=[Depends(member)])
     def signups(s: Session = Depends(session)) -> list[dict]:
         return cached("signups", lambda: stats.signups(s))
 
-    @app.get("/api/projects")
+    @app.get("/api/projects", dependencies=[Depends(member)])
     def projects(s: Session = Depends(session)) -> list[dict]:
         return cached("projects", lambda: stats.projects_by_cursus(s))
 
-    @app.get("/api/projects/monthly")
+    @app.get("/api/projects/monthly", dependencies=[Depends(member)])
     def projects_monthly(s: Session = Depends(session)) -> list[dict]:
         return cached("projects_monthly", lambda: stats.projects_monthly(s))
 
-    @app.get("/api/attendance")
+    @app.get("/api/attendance", dependencies=[Depends(member)])
     def attendance(s: Session = Depends(session)) -> dict:
         return cached("attendance", lambda: stats.attendance(s))
 
-    @app.get("/api/evaluations")
+    @app.get("/api/evaluations", dependencies=[Depends(member)])
     def evaluations(s: Session = Depends(session)) -> dict:
         return cached("evaluations", lambda: stats.evaluations(s))
 
-    @app.get("/api/events")
+    @app.get("/api/events", dependencies=[Depends(member)])
     def events(s: Session = Depends(session)) -> dict:
         return cached("events", lambda: stats.events_exams(s))
 
@@ -336,8 +346,14 @@ def create_app(
         return FileResponse(WEB_DIR / "login.html", media_type="text/html; charset=utf-8")
 
     @app.get("/campus")
-    def campus_page() -> FileResponse:
+    def campus_page(request: Request):
+        if require_login and current_user(request) is None:
+            return RedirectResponse("/login", status_code=302)
         return FileResponse(WEB_DIR / "index.html", media_type="text/html; charset=utf-8")
+
+    @app.get("/robots.txt")
+    def robots() -> Response:
+        return Response("User-agent: *\nDisallow: /\n", media_type="text/plain")
 
     app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
     return app

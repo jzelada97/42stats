@@ -102,5 +102,55 @@ def test_hostile_text_in_api_data_is_returned_as_data_not_markup(engine):
         s.add(Project(id=1, name="<img src=x onerror=alert(1)>", slug="x"))
         s.commit()
     c, _ = make_client(engine)
+    login(c)
     r = c.get("/api/projects")
     assert r.headers["content-type"].startswith("application/json") and r.headers["x-content-type-options"] == "nosniff"
+
+
+# ---------------------------------------------------------------- las estadísticas del campus solo para miembros
+
+STATS_ENDPOINTS = ["overview", "levels", "cohorts", "blackholes", "milestones", "signups", "projects", "projects/monthly",
+                   "attendance", "evaluations", "events"]
+
+
+@pytest.mark.parametrize("path", STATS_ENDPOINTS)
+def test_every_campus_stats_endpoint_requires_a_session(engine, path):
+    c, _ = make_client(engine)
+    r = c.get(f"/api/{path}")
+    assert r.status_code == 401 and "Inicia sesión" in r.json()["detail"]
+    login(c)
+    assert c.get(f"/api/{path}").status_code == 200
+
+
+def test_campus_page_redirects_visitors_and_opens_for_members(engine):
+    c, _ = make_client(engine)
+    r = c.get("/campus")
+    assert r.status_code == 302 and r.headers["location"] == "/login" and r.headers["cache-control"] == "no-store"
+    login(c)
+    assert c.get("/campus").status_code == 200
+
+
+def test_only_login_health_and_static_assets_are_public(engine):
+    c, _ = make_client(engine)
+    assert c.get("/api/health").status_code == 200
+    assert c.get("/api/session").status_code == 200
+    assert c.get("/login").status_code == 200 and c.get("/static/style.css").status_code == 200
+    assert "/api/overview" not in c.get("/static/login.js").text           # la pantalla de login ya no enseña cifras del campus
+
+
+def test_user_outside_the_campus_data_cannot_reach_any_stats(engine):
+    c, _ = make_client(engine, me={"id": 777, "login": "stranger"})
+    login(c)                                                                  # rechazado en el callback: no hay sesión
+    assert c.get("/api/overview").status_code == 401 and c.get("/campus").status_code == 302
+
+
+def test_search_engines_are_told_to_stay_away(engine):
+    c, _ = make_client(engine)
+    assert c.get("/robots.txt").text.strip().splitlines() == ["User-agent: *", "Disallow: /"]
+    assert c.get("/login").headers["x-robots-tag"] == "noindex, nofollow"
+
+
+def test_stats_responses_are_private_to_the_browser_cache(engine):
+    c, _ = make_client(engine)
+    login(c)
+    assert c.get("/api/overview").headers["cache-control"] == "private, max-age=300"

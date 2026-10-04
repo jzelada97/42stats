@@ -16,6 +16,7 @@ const duration = (min) => (min == null ? "–" : min >= 60 ? `${Math.floor(min /
 
 async function get(path) {
   const r = await fetch(path);
+  if (r.status === 401) { location.replace("/login"); throw new Error("sesión necesaria"); }
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `HTTP ${r.status}`);
   return r.json();
 }

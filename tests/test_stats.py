@@ -190,13 +190,13 @@ def test_stats_have_no_personal_fields(engine):
 
 
 def test_api_endpoints_and_headers(engine):
-    c = TestClient(create_app(engine, 21))
+    c = TestClient(create_app(engine, 21, require_login=False))
     assert c.get("/api/health").json() == {"status": "ok"}
     for path in ("overview", "levels", "cohorts", "signups", "projects", "projects/monthly",
                  "attendance", "evaluations", "events"):
         assert c.get(f"/api/{path}").status_code == 200, path
     r = c.get("/api/overview")
-    assert r.headers["cache-control"] == "public, max-age=300"
+    assert r.headers["cache-control"] == "private, max-age=300"
     assert r.headers["x-content-type-options"] == "nosniff"
     assert "script-src 'self'" in r.headers["content-security-policy"]
     assert "max-age" not in c.get("/api/health").headers.get("cache-control", "")
@@ -211,18 +211,18 @@ def test_api_caches_expensive_queries(engine, monkeypatch):
         return real(*a, **k)
 
     monkeypatch.setattr(stats, "attendance", counting)
-    c = TestClient(create_app(engine, 21))
+    c = TestClient(create_app(engine, 21, require_login=False))
     c.get("/api/attendance"), c.get("/api/attendance")
     assert calls["n"] == 1
 
 
 def test_api_returns_503_when_tables_missing():
     empty = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
-    assert TestClient(create_app(empty, 21)).get("/api/overview").status_code == 503
+    assert TestClient(create_app(empty, 21, require_login=False)).get("/api/overview").status_code == 503
 
 
 def test_index_and_static_assets_served():
-    web = TestClient(create_app(create_engine("sqlite://"), 21))
+    web = TestClient(create_app(create_engine("sqlite://"), 21, require_login=False))
     r = web.get("/campus")
     assert r.status_code == 200 and "42" in r.text
     assert r.text.count("<script") == r.text.count('<script src="/static/')  # sin JS inline (la CSP lo bloquea)
@@ -248,7 +248,7 @@ def test_readonly_engine_survives_many_concurrent_requests(tmp_path):
         s.commit()
     ro = make_readonly_engine(url)
     assert isinstance(ro.pool, NullPool)
-    client = TestClient(create_app(ro, 21))
+    client = TestClient(create_app(ro, 21, require_login=False))
     paths = ["overview", "levels", "cohorts", "signups", "projects", "attendance", "evaluations", "events"] * 6
     with ThreadPoolExecutor(max_workers=16) as ex:
         codes = list(ex.map(lambda p: client.get(f"/api/{p}").status_code, paths))

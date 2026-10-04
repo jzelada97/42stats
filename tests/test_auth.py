@@ -242,8 +242,9 @@ def test_root_is_the_login_screen_for_visitors_and_sends_members_to_their_panel(
     r = c.get("/")
     assert r.status_code == 200 and "Entrar con 42" in r.text and r.headers["cache-control"] == "no-store"
     assert "Resumen" not in r.text                                  # la portada ya no es el panel del campus
-    assert c.get("/campus").status_code == 200 and "Cómo está el campus hoy" in c.get("/campus").text
+    assert c.get("/campus").status_code == 302                      # las estadísticas del campus ya no son públicas
     login(c)
+    assert c.get("/campus").status_code == 200 and "Cómo está el campus hoy" in c.get("/campus").text
     r = c.get("/")
     assert r.status_code == 302 and r.headers["location"] == "/me"   # con sesión, la portada lleva a su panel
 
