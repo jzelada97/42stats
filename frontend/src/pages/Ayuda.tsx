@@ -574,22 +574,12 @@ export default function Ayuda() {
               {" "}<b>Nunca</b> pasar código ni enlaces a soluciones. Los recursos se revisan antes de publicarse.
             </p>
           </Card>
-          <fieldset className="circles">
-            <legend>Círculo</legend>
-            <div className="circle-row">
-              {ov.ranks.map((r) => {
-                const val = r.id == null ? "none" : String(r.id);
-                return (
-                  <label className="circle" key={val}>
-                    <input type="radio" name="circulo" value={val} checked={(rank == null ? "none" : String(rank)) === val}
-                      onChange={() => setRank(r.id == null ? null : Number(r.id))} />
-                    <span>{r.name}<small>{r.projects}</small></span>
-                  </label>
-                );
-              })}
-            </div>
-            <p className="sub">Elige el círculo y cada desplegable de proyectos mostrará solo los suyos.</p>
-          </fieldset>
+          <div className="cursus-bar">
+            <Select inline label="Círculo" value={rank == null ? "none" : String(rank)}
+              onChange={(v) => setRank(v === "none" ? null : Number(v))}
+              options={ov.ranks.map((r) => ({ value: r.id == null ? "none" : String(r.id), label: `${r.name} (${r.projects})` }))} />
+            <span className="sub">Elige el círculo y cada desplegable de proyectos mostrará solo los suyos.</span>
+          </div>
         </Section>
 
         <AskForHelp ov={ov} here={here} project={reqProject} setProject={setReqProject} refresh={refreshAll} />
