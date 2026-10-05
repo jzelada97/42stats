@@ -4,7 +4,7 @@ Web de estadísticas y ayuda entre alumnos para el campus **42 Madrid** (campus 
 Entras con tu cuenta de 42 y ves **cómo vas frente a tu promoción** (ritmo, milestones, actividad, señales de atasco y consejos), **estadísticas
 del campus** y una sección de **ayuda entre alumnos** (recursos, mentores que ya validaron cada proyecto, peticiones y puntos de mentoría).
 
-En producción: <https://42madrid.zelada.es>. Por qué existe, con datos reales de bajas y blackholeados: [docs/POC.md](docs/POC.md).
+En producción: <https://42madrid.zelada.es>. Por qué existe, con datos reales de cursus cerrados sin graduarse: [docs/POC.md](docs/POC.md).
 
 ## Índice
 
@@ -88,7 +88,7 @@ de ordenador. La primera carga puede tardar horas por el límite de la API (2 pe
 | **Cursus de un intento** | El del intento (`project_users.cursus_ids`), no el del catálogo de proyectos, que incluye otros campus |
 | **Alumno** | Cuenta con `kind = student`; las de staff (`admin`) y las externas nunca cuentan, aunque tengan registro en el 42cursus |
 | **Activo** | Cursus abierto (sin fecha de cierre, o con cierre futuro) y no graduado |
-| **Graduado** | Marcado como *alumni* por la API. Conserva el cursus «abierto», pero ya no avanza ni corre ningún plazo, así que se cuenta aparte |
+| **Graduado** | Marcado como *alumni* por la API (`alumni?`) y con registro en el 42cursus. Conserva el cursus «abierto», pero ya no avanza ni corre ningún plazo, así que se cuenta aparte. Hay otros alumni sin ningún registro de cursus en los datos; no se cuentan, y el POC da las dos cifras |
 | **Cerró sin graduarse** | Cursus cerrado y no alumni. **En 42 no existe la baja voluntaria** (quien se va deja de venir y acaba blackholeado), así que en la práctica es un cierre por blackhole, aunque la API no indica el motivo |
 | **Relación con la fecha de la API** | Solo describe cuándo se cerró respecto a `blackholed_at`: *en su fecha* (entre 1 día antes y 60 después), *antes* (más de 1 día antes) o *después* (más de 60 días después o sin fecha). **No es la causa**: esa fecha es orientativa |
 | **Milestones / ranks** | Los *Common Core Rank 00 a 05* (quests del 42cursus) |

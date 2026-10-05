@@ -52,6 +52,15 @@ def main() -> dict:
         closed = [m for m in members if m["outcome"] in CLOSED]
         out["members"] = {"total": len(members), "active": by["current"], "graduated": by["graduated"], "closed_without_graduating": len(closed),
                           "closed_by_relation_to_api_date": {k: by[k] for k in CLOSED}}
+        # Graduados: el campo alumni de la API (alumni?) frente a quien solo tiene los seis ranks. Todo sobre alumnos (kind = student).
+        students = {u for u in with_record if kind.get(u) == "student"}
+        alumni = {u for (u,) in s.execute(select(User.id).where(User.kind == "student", User.alumni.is_(True)))}
+        rank_of = {qid: int(m[1]) for qid, name in s.execute(select(Quest.id, Quest.name).where(Quest.cursus_id == CURSUS)) if name and (m := RANK_RE.match(name))}
+        last = [qid for qid, n in rank_of.items() if n == max(rank_of.values())]
+        six = {u for (u,) in s.execute(select(QuestUser.user_id).where(QuestUser.quest_id.in_(last), QuestUser.validated_at.is_not(None)))} & students
+        out["graduates"] = {"alumni_flag_in_db": len(alumni), "alumni_in_42cursus": len(alumni & students), "alumni_outside_42cursus": len(alumni - students),
+                            "six_ranks_in_42cursus": len(six), "six_ranks_not_alumni": len(six - alumni), "alumni_without_six_ranks": len((alumni & students) - six),
+                            "students_without_42cursus_record": out["accounts"]["students_in_db"] - len(students)}
         out["cohorts"] = stats.cohorts(s, CURSUS)
         out["closures_by_month_24m"] = [(h["month"], h["count"]) for h in stats.blackholes(s, CURSUS).get("history", [])]
         cur_members = [m for m in members if m["outcome"] == "current"]
