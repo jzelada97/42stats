@@ -215,19 +215,17 @@ legend { padding: 0 6px; font-size: 13px; color: var(--muted); }
 details > summary { cursor: pointer; color: var(--ink-2); font-size: 14px; list-style-position: inside; }
 details.card > summary { font: 500 17px var(--serif); color: var(--ink); }
 details[open] > summary { margin-bottom: 8px; }
-/* secciones plegables */
-.fold > details { border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 55%, transparent); }
-.fold > details > summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 24px; margin: 0; cursor: pointer; border-radius: var(--radius); color: var(--ink); }
+/* secciones plegables: solo la cabecera se pliega, sin caja alrededor; las tarjetas de dentro quedan como siempre */
+.fold > details > summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 4px 0 14px; margin: 0; cursor: pointer; color: var(--ink); border-bottom: 1px solid var(--border); border-radius: 2px; }
 .fold > details > summary::-webkit-details-marker { display: none; }
-.fold > details > summary:hover { background: var(--accent-soft); }
-.fold > details > summary:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+.fold > details > summary:hover .fold-chev { border-color: var(--accent); }
+.fold > details > summary:focus-visible { outline: none; box-shadow: 0 2px 0 var(--accent); }
 .fold-text { display: grid; gap: 4px; min-width: 0; }
-.fold-text h2 { font-size: 22px; margin: 0; }
+.fold-text h2 { margin: 0; }
 .fold-hint { font-size: 14px; color: var(--muted); }
 .fold-chev { flex: none; width: 9px; height: 9px; border-right: 2px solid var(--accent-ink); border-bottom: 2px solid var(--accent-ink); transform: translateY(-2px) rotate(45deg); transition: transform 220ms var(--ease); }
 .fold > details[open] > summary .fold-chev { transform: translateY(2px) rotate(-135deg); }
-.fold-body { display: grid; gap: 24px; padding: 4px 24px 24px; min-width: 0; }
-@media (max-width: 560px) { .fold > details > summary { padding: 16px 18px; } .fold-body { padding: 4px 14px 18px; } }
+.fold-body { display: grid; gap: 24px; padding-top: 24px; min-width: 0; }
 @media (prefers-reduced-motion: reduce) { .fold-chev { transition: none; } }
 .datefield { position: relative; display: grid; gap: 4px; min-width: 0; }
 .df-label { font-size: 13px; color: var(--ink-2); }
