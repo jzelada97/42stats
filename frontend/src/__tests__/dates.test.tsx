@@ -31,9 +31,9 @@ describe("fechas", () => {
     expect(weeks.every((w) => w.length === 7)).toBe(true);
   });
 
-  it("la piscina se lee en español", () => {
-    expect(poolLabel("april 2026")).toBe("abril 2026");
-    expect(poolLabel("september 2025")).toBe("septiembre 2025");
+  it("la piscina se escribe con mayúscula inicial, en inglés como viene", () => {
+    expect(poolLabel("april 2026")).toBe("April 2026");
+    expect(poolLabel("September 2025")).toBe("September 2025");
     expect(poolLabel("2026")).toBe("2026");
   });
 });

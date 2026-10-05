@@ -238,7 +238,7 @@ copy .env.example .env              # rellena FT_UID y FT_SECRET (nunca los suba
 
 ```powershell
 .\.venv\Scripts\python -m pytest -q        # 363 pruebas de Python
-cd frontend; npm test                       # 45 pruebas del frontend
+cd frontend; npm test                       # 57 pruebas del frontend
 ```
 
 Cubren la sincronización y las reglas de cálculo, el login y las sesiones, la seguridad (cabeceras, límites, entradas hostiles, autorización), la ayuda y los puntos

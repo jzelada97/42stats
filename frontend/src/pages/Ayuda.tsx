@@ -73,7 +73,7 @@ function Resources({ ov, here, rank, project, setProject, isAdmin, onAdminChange
   const query = project ? `?project_id=${Number(project)}` : rank != null ? `?rank=${Number(rank)}` : "";
   const res = useLoad<{ resources: any[]; mine_pending: any[] }>("/api/help/resources" + query);
   return (
-    <Section id="recursos" kicker="estudiar" title="Recursos de estudio" lead="Guías, documentación, vídeos y herramientas que explican el tema. Aprobados a mano.">
+    <Section id="recursos" fold="open" hint="Guías, vídeos y herramientas por proyecto" kicker="estudiar" title="Recursos de estudio" lead="Guías, documentación, vídeos y herramientas que explican el tema. Aprobados a mano.">
       <Card>
         <label className="inline">Proyecto
           <select value={project} onChange={(e) => setProject(e.target.value)}>
@@ -302,7 +302,7 @@ function Confirmations({ ov, refresh }: { ov: Overview; refresh: () => Promise<v
 function Incoming({ ov, refresh }: { ov: Overview; refresh: () => Promise<void> }) {
   const mentor = !!(ov.offer && ov.offer.active && ov.offer.project_ids.length);
   return (
-    <Section id="peticiones" kicker="peticiones" title="Peticiones de otros alumnos" lead="Alumnos que piden ayuda en proyectos que tú ya validaste. Solo las ven quienes se han ofrecido como mentores en ese proyecto.">
+    <Section id="peticiones" fold={ov.incoming.length || ov.confirmations.length ? "open" : "closed"} hint={ov.incoming.length ? `${ov.incoming.length} petición${ov.incoming.length === 1 ? "" : "es"} en tus proyectos` : "Nadie pide ayuda ahora mismo"} kicker="peticiones" title="Peticiones de otros alumnos" lead="Alumnos que piden ayuda en proyectos que tú ya validaste. Solo las ven quienes se han ofrecido como mentores en ese proyecto.">
       <Card>
         {!mentor && <p className="sub" role="status">Para ver las peticiones, ofrécete como mentor en un proyecto que ya hayas validado (arriba, en Mentoría).</p>}
         {mentor && !ov.incoming.length && <p className="sub" role="status">Ahora mismo nadie pide ayuda en tus proyectos.</p>}
@@ -413,7 +413,7 @@ function AskForHelp({ ov, here, project, setProject, refresh }: { ov: Overview; 
     }
   }
   return (
-    <Section id="pedir" kicker="pedir ayuda" title="¿Estás atascado?" lead="Describe qué has probado y qué no entiendes. Hasta 3 peticiones abiertas; caducan a los 30 días. Solo puedes pedir ayuda en proyectos que aún no has validado.">
+    <Section id="pedir" fold="open" hint="Cuéntanos dónde te has atascado" kicker="pedir ayuda" title="¿Estás atascado?" lead="Describe qué has probado y qué no entiendes. Hasta 3 peticiones abiertas; caducan a los 30 días. Solo puedes pedir ayuda en proyectos que aún no has validado.">
       <div className="grid2">
         <Card>
           <form className="stack" onSubmit={submit} noValidate>
@@ -496,7 +496,7 @@ function Moderation({ tick }: { tick: number }) {
   }
   const l = logins.data;
   return (
-    <Section id="moderacion" kicker="administración" title="Moderación">
+    <Section id="moderacion" fold="closed" hint="Recursos, mentores y puntos por revisar" kicker="administración" title="Moderación">
       <Pending tick={tick} />
       <Card title="Accesos a la web" sub="Alumnos distintos que han entrado con 42. Solo se guarda login y fechas (no la IP) durante 90 días. Las horas son las de tu zona.">
         {l && (
@@ -601,9 +601,11 @@ export default function Ayuda() {
           </div>
         </Section>
 
+        <AskForHelp ov={ov} here={here} project={reqProject} setProject={setReqProject} refresh={refreshAll} />
+
         <Resources ov={ov} here={here} rank={rank} project={resProject} setProject={setResProject} isAdmin={ov.is_admin} onAdminChange={() => setTick((t) => t + 1)} />
 
-        <Section id="mentoria" kicker="mentoría" title="Alumnos que ya lo pasaron" lead="Solo aparecen quienes, según nuestros datos, tienen el proyecto validado.">
+        <Section id="mentoria" fold="open" hint="Quién ya pasó cada proyecto, y ofrecerte tú" kicker="mentoría" title="Alumnos que ya lo pasaron" lead="Solo aparecen quienes, según nuestros datos, tienen el proyecto validado.">
           <div className="grid2">
             <MentorList here={here} project={mentorProject} setProject={setMentorProject} />
             <OfferCard ov={ov} rank={rank} refresh={refreshAll} />
@@ -612,7 +614,6 @@ export default function Ayuda() {
 
         <Incoming ov={ov} refresh={refreshAll} />
         <Avisos />
-        <AskForHelp ov={ov} here={here} project={reqProject} setProject={setReqProject} refresh={refreshAll} />
         {ov.is_admin && <Moderation tick={tick} />}
       </main>
     );

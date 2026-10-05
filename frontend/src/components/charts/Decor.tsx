@@ -34,9 +34,9 @@ function centre(t: number): { x: number; y: number; nx: number; ny: number } {
   return { x: 50 + r * Math.sin(a), y: 50 - r * Math.cos(a), nx: Math.sin(a), ny: -Math.cos(a) };
 }
 
-/** Grosor a lo largo del trazo (u de 0 a 1 en lo dibujado): se apoya con fuerza, aligera y termina en cola fina. */
+/** Grosor a lo largo del trazo (u de 0 a 1 en lo dibujado): arranca fino, va cargando pincel y acaba grueso y algo romo. */
 const girth = (u: number, scale: number) =>
-  scale * (1.2 + 7.2 * smooth(0, 0.05, u) - 3.4 * u + 0.7 * Math.sin(11 * u + 1.3)) * (1 - 0.8 * smooth(0.78, 1, u));
+  scale * (1 + 7.4 * smooth(0, 0.9, u) + 0.6 * Math.sin(11 * u + 1.3) * smooth(0.1, 0.4, u)) * (1 - 0.3 * smooth(0.94, 1, u));
 
 /** Contorno relleno del trazo hasta la fracción v del recorrido. */
 function brushPath(v: number, scale = 1): string {

@@ -1,8 +1,52 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { fmt } from "../lib/format";
 
-export function Section({ id, kicker, title, lead, children }: { id?: string; kicker?: string; title: string; lead?: ReactNode; children?: ReactNode }) {
+const foldKey = (id: string) => `fold:${location.pathname}#${id}`;
+function savedFold(id: string): boolean | null {
+  try {
+    const v = localStorage.getItem(foldKey(id));
+    return v === null ? null : v === "1";
+  } catch { return null; }
+}
+
+/** Una sección que se pliega. Un enlace con #id la abre; si el usuario la abre o cierra, se acuerda en este navegador. */
+function Fold({ id, kicker, title, lead, open: initial, hint, children }: { id: string; kicker?: string; title: string; lead?: ReactNode; open: boolean; hint?: ReactNode; children?: ReactNode }) {
+  const hid = `h-${id}`;
+  const [open, setOpen] = useState(() => location.hash === `#${id}` || (savedFold(id) ?? initial));
+  useEffect(() => {
+    const on = () => { if (location.hash === `#${id}`) setOpen(true); };
+    window.addEventListener("hashchange", on);
+    return () => window.removeEventListener("hashchange", on);
+  }, [id]);
+  return (
+    <section className="section fold" id={id} aria-labelledby={hid}>
+      <details open={open} onToggle={(e) => {
+        const now = (e.currentTarget as HTMLDetailsElement).open;
+        if (now === open) return;                               // el evento también salta al montar o al abrirse por un enlace: no es una elección del usuario
+        setOpen(now);
+        try { localStorage.setItem(foldKey(id), now ? "1" : "0"); } catch { /* sin almacenamiento: se queda como está */ }
+      }}>
+        <summary>
+          <span className="fold-text">
+            {kicker && <span className="kicker">{kicker}</span>}
+            <h2 id={hid}>{title}</h2>
+            {hint && !open && <span className="fold-hint">{hint}</span>}
+          </span>
+          <span className="fold-chev" aria-hidden="true" />
+        </summary>
+        <div className="fold-body">
+          {lead && <p className="lead">{lead}</p>}
+          {children}
+        </div>
+      </details>
+    </section>
+  );
+}
+
+/** `fold` la hace plegable: "open" o "closed" es cómo empieza; `hint` es el resumen que se ve mientras está cerrada. */
+export function Section({ id, kicker, title, lead, fold, hint, children }: { id?: string; kicker?: string; title: string; lead?: ReactNode; fold?: "open" | "closed"; hint?: ReactNode; children?: ReactNode }) {
   const hid = id ? `h-${id}` : undefined;
+  if (fold && id) return <Fold id={id} kicker={kicker} title={title} lead={lead} open={fold === "open"} hint={hint}>{children}</Fold>;
   return (
     <section className="section" id={id} aria-labelledby={hid}>
       <div className="section-head">

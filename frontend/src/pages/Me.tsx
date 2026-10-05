@@ -158,7 +158,8 @@ export default function Me() {
           </Card>
         </Section>
 
-        <Section kicker="42cursus / milestones" title="Tus milestones">
+        <Section id="milestones" fold="closed" kicker="42cursus / milestones" title="Tus milestones"
+          hint={`${d.milestones.length ? `Último: ${d.milestones[d.milestones.length - 1].label}` : "Sin ranks validados"}${d.level == null ? "" : ` · nivel ${fmt1(d.level)}`}`}>
           <div className="grid2">
             <Card title="Common Core Rank" sub="Fecha de cada rank y días desde el anterior."><Bamboo d={d} /></Card>
             <Card title="Tu nivel frente a tu cursus"
@@ -171,7 +172,8 @@ export default function Me() {
           </div>
         </Section>
 
-        <Section kicker="campus / actividad" title="Tu actividad">
+        <Section id="actividad" fold="closed" kicker="campus / actividad" title="Tu actividad"
+          hint={`${fmt1(d.activity.hours_30d)} h en 30 días · ${fmt(p.validated_90d)} proyectos validados en 90 días`}>
           <div className="grid2">
             <Card title="Horas por semana" sub="Sesiones de ordenador en el campus, últimas 12 semanas.">
               <Columns label="Horas por semana" data={weekly} tip={(x) => <>Semana del {x.label}: <b>{fmt1(x.value)} h</b></>} />
