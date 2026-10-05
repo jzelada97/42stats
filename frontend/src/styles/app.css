@@ -143,8 +143,6 @@ p { margin: 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* ---------------------------------------------------------------- cabecera */
-.bar { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
-.bar-in { max-width: 1120px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .brand { font: 500 20px var(--serif); color: var(--ink); text-decoration: none; display: inline-flex; align-items: baseline; gap: 8px; white-space: nowrap; }
 .brand small { font: 13px var(--sans); color: var(--muted); }
 .brand .mark { align-self: center; color: var(--accent-ink); }
@@ -156,7 +154,7 @@ p { margin: 0; }
 .theme-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 
 /* ---------------------------------------------------------------- estructura (ma: mucho aire) */
-main { max-width: 1120px; margin: 0 auto; padding: 56px 24px 40px; display: grid; gap: 88px; }
+main { max-width: 1120px; margin: 0 auto; padding: 84px 24px 40px; display: grid; gap: 88px; }
 .section { display: grid; gap: 24px; min-width: 0; }
 .section-head { display: grid; gap: 8px; }
 .kicker { font: 600 12px var(--sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent-ink); }
@@ -179,7 +177,7 @@ main { max-width: 1120px; margin: 0 auto; padding: 56px 24px 40px; display: grid
 .empty { color: var(--muted); font-size: 14px; padding: 18px 4px; position: relative; }
 
 /* ---------------------------------------------------------------- cifras */
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(136px, 1fr)); gap: 14px; }
 .tile { border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius-sm); background: var(--bg); padding: 14px 16px 13px; min-width: 0; }
 .tile .v { font: 500 30px/1.15 var(--serif); letter-spacing: -0.01em; }
 .tile .v small { font: 500 13px var(--sans); color: var(--muted); margin-left: 4px; }
@@ -404,7 +402,7 @@ svg .cell { stroke: var(--surface); stroke-width: 1; }
 .sig-val { font: 500 24px var(--serif); }
 
 /* ---------------------------------------------------------------- acceso */
-.login-wrap { min-height: calc(100vh - 140px); display: grid; place-items: center; padding-top: 24px; }
+.login-wrap { min-height: 100vh; box-sizing: border-box; display: grid; place-items: center; padding-top: 84px; }
 .login-card { position: relative; overflow: hidden; max-width: 640px; width: 100%; padding: 44px 40px 40px; gap: 18px; }
 .login-card > *:not(.seigaiha) { position: relative; }
 .login-points { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 12px; font-size: 14px; color: var(--ink-2); }
@@ -423,7 +421,6 @@ svg .cell { stroke: var(--surface); stroke-width: 1; }
   main { gap: 64px; padding-top: 36px; }
   .grid2 { grid-template-columns: minmax(0, 1fr); }
   .hero, .card.cta, .status-grid { grid-template-columns: minmax(0, 1fr); }
-  .bar-in { padding: 10px 16px; gap: 10px; }
   .brand small { display: none; }
   .theme-btn span { display: none; }
   .theme-btn { padding: 7px 9px; }
@@ -450,8 +447,12 @@ svg .cell { stroke: var(--surface); stroke-width: 1; }
 
 /* ---------------------------------------------------------------- cabecera mínima y menú */
 .bar-actions { display: flex; gap: 10px; align-items: center; }
+.float-menu { position: fixed; top: 16px; right: 16px; z-index: 40; }
+.float-bare { position: absolute; top: 0; left: 0; right: 0; z-index: 40; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 24px; }
 .menu-wrap { position: relative; }
-.menu-btn { position: relative; width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--ink); cursor: pointer; transition: border-color 160ms var(--ease); }
+.menu a.menu-brand { padding: 6px 10px 0; font: 500 20px var(--serif); justify-content: flex-start; gap: 8px; }
+.menu a.menu-brand:hover { background: transparent; }
+.menu-btn { position: relative; width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 999px; background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: blur(8px); box-shadow: var(--shadow); color: var(--ink); cursor: pointer; transition: border-color 160ms var(--ease); }
 .menu-btn:hover, .menu-btn[aria-expanded="true"] { border-color: var(--accent); }
 .burger line { stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; transform-origin: center; transform-box: fill-box; transition: transform 240ms var(--ease), opacity 160ms var(--ease); }
 .burger[data-open="1"] .l1 { transform: translateY(5px) rotate(45deg); }

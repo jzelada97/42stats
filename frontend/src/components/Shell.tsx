@@ -60,8 +60,8 @@ function Burger({ open }: { open: boolean }) {
 }
 
 /** Menú desplegable: se cierra con Escape, al pulsar fuera o al elegir una opción, y devuelve el foco al botón. */
-function Menu({ sections, current, badge, session }: {
-  sections: NavLink[]; current?: string; badge: number; session: { login: string | null; name: string | null };
+function Menu({ sub, sections, current, badge, session }: {
+  sub: string; sections: NavLink[]; current?: string; badge: number; session: { login: string | null; name: string | null };
 }) {
   const [open, setOpen] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
@@ -94,6 +94,7 @@ function Menu({ sections, current, badge, session }: {
       </button>
       {open && (
         <nav id="site-menu" className="menu" aria-label="Navegación" ref={panel}>
+          <a className="brand menu-brand" href="/">{BRAND}<small>/ {sub}</small></a>
           <div className="who">Hola, <b>{session.name || session.login}</b></div>
           <ul className="menu-group">
             {PAGES.map((l) => (
@@ -130,21 +131,21 @@ function Menu({ sections, current, badge, session }: {
   );
 }
 
+/** Sin barra: con sesión solo flota el botón de las tres rayas (el nombre y la navegación van dentro del menú); sin sesión, el nombre y el tema. */
 export function Header({ sub, links, current, showAuth = true }: { sub: string; links: NavLink[]; current?: string; showAuth?: boolean }) {
   const session = useSession();
   const badge = useHelpBadge(!!session?.logged_in);
+  if (session?.logged_in) {
+    return <div className="float-menu"><Menu sub={sub} sections={links} current={current} badge={badge} session={session} /></div>;
+  }
   return (
-    <header className="bar">
-      <div className="bar-in">
-        <a className="brand" href="/">{BRAND}<small>/ {sub}</small></a>
-        {session?.logged_in
-          ? <Menu sections={links} current={current} badge={badge} session={session} />
-          : <div className="bar-actions">
-              {showAuth && session && <a className="auth-link" href="/login">Entrar con 42</a>}
-              <ThemeToggle />
-            </div>}
+    <div className="float-bare">
+      <a className="brand" href="/">{BRAND}<small>/ {sub}</small></a>
+      <div className="bar-actions">
+        {showAuth && session && <a className="auth-link" href="/login">Entrar con 42</a>}
+        <ThemeToggle />
       </div>
-    </header>
+    </div>
   );
 }
 

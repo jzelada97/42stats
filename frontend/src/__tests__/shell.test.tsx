@@ -22,6 +22,7 @@ describe("cabecera mínima", () => {
   it("lleva el nombre de la web y no «42 Madrid»", async () => {
     mockSession(true);
     page();
+    await userEvent.click(await screen.findByRole("button", { name: "Menú" }));                // el nombre vive dentro del menú
     expect(await screen.findByRole("link", { name: new RegExp(BRAND) })).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/42 Madrid/);
     expect(pageTitle("Mi panel")).toBe(`Mi panel · ${BRAND}`);
