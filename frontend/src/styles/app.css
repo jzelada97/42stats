@@ -372,15 +372,15 @@ svg .cell { stroke: var(--surface); stroke-width: 1; }
 .mp-now { display: flex; gap: 14px; align-items: center; color: var(--accent-ink); }
 .mp-tier { font: 500 24px/1.1 var(--serif); color: var(--ink); }
 .mp-next { display: grid; gap: 6px; min-width: 0; }
-.bar { height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; }
-.bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; transition: width 600ms var(--ease); }
+.tier-progress { height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; }
+.tier-progress i { display: block; height: 100%; background: var(--accent); border-radius: 4px; transition: width 600ms var(--ease); }
 .mp-ladder { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
 .mp-ladder li { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--muted); font-size: 13px; }
 .mp-ladder li .tier-badge { color: var(--muted); }
 .mp-ladder li.got { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
 .mp-ladder li.got .tier-badge { color: var(--accent-ink); }
 @media (max-width: 560px) { .mp-top { grid-template-columns: minmax(0, 1fr); gap: 14px; } }
-@media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .tier-progress i { transition: none; } }
 .tier { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: var(--ink-2); margin-top: 2px; }
 .close-box { display: grid; gap: 8px; justify-items: start; min-width: 0; }
 .close-box select { width: auto; max-width: 100%; }

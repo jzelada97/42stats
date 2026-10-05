@@ -44,6 +44,13 @@ ALLOWED_HREFS = [
 ]
 
 
+def test_no_css_class_is_defined_twice_at_top_level():
+    """Dos reglas `.nombre { … }` con la misma clase se pisan: una barra de progreso llamada `.bar` encogió la cabecera (que ya usaba `.bar`)."""
+    css = (SRC / "styles" / "app.css").read_text(encoding="utf-8")
+    names = re.findall(r"^(\.[A-Za-z0-9_-]+) \{", css, re.M)
+    assert sorted({n for n in names if names.count(n) > 1}) == []
+
+
 def test_every_href_is_validated_or_a_constant_of_the_site():
     for f in sources():
         text = f.read_text(encoding="utf-8")

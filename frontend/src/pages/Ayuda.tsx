@@ -202,7 +202,7 @@ function PointsCard({ p }: { p: Points }) {
         <div className="mp-next">
           {p.next && target ? (
             <>
-              <div className="bar" role="img" aria-label={`${p.verified} de ${target} puntos para ${p.next.name}`}><i style={{ width: `${Math.round((p.verified / target) * 100)}%` }} /></div>
+              <div className="tier-progress" role="img" aria-label={`${p.verified} de ${target} puntos para ${p.next.name}`}><i style={{ width: `${Math.round((p.verified / target) * 100)}%` }} /></div>
               <div className="m">Te {p.next.needs === 1 ? "falta" : "faltan"} {p.next.needs} para {p.next.name}</div>
             </>
           ) : <div className="m">Has llegado al tramo más alto.</div>}
