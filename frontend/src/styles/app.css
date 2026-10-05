@@ -227,6 +227,24 @@ details[open] > summary { margin-bottom: 8px; }
 .fold > details[open] > summary .fold-chev { transform: translateY(2px) rotate(-135deg); }
 .fold-body { display: grid; gap: 24px; padding-top: 24px; min-width: 0; }
 @media (prefers-reduced-motion: reduce) { .fold-chev { transition: none; } }
+.selectfield { display: grid; gap: 4px; min-width: 0; }
+.selectfield.inline { display: inline-flex; align-items: center; gap: 10px; max-width: 100%; }
+.sf-label { font-size: 13px; color: var(--ink-2); }
+.sf-box { position: relative; min-width: 0; }
+.sf-btn { display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 100%; min-width: 180px; font: inherit; font-size: 14px; color: var(--ink); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 12px; cursor: pointer; text-align: left; transition: border-color 160ms var(--ease); }
+.selectfield.inline .sf-btn { width: auto; }
+.sf-btn:hover, .sf-btn[aria-expanded="true"] { border-color: var(--accent); }
+.sf-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+.sf-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.sf-chev { flex: none; width: 7px; height: 7px; border-right: 2px solid var(--accent-ink); border-bottom: 2px solid var(--accent-ink); transform: translateY(-2px) rotate(45deg); transition: transform 200ms var(--ease); }
+.sf-btn[aria-expanded="true"] .sf-chev { transform: translateY(1px) rotate(-135deg); }
+.sf-list { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; min-width: 100%; width: max-content; max-width: min(420px, calc(100vw - 32px)); max-height: 260px; overflow-y: auto; margin: 0; padding: 6px; list-style: none; display: grid; gap: 2px; background: var(--raised); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow), 0 12px 32px rgba(0, 0, 0, 0.12); }
+.sf-list li { padding: 8px 12px; border-radius: 8px; font-size: 14px; color: var(--ink-2); cursor: pointer; overflow-wrap: anywhere; }
+.sf-list li.act { background: var(--accent-soft); color: var(--ink); }
+.sf-list li.sel { color: var(--ink); font-weight: 600; }
+.sf-list li.sel::after { content: "✓"; float: right; margin-left: 14px; color: var(--accent-ink); }
+.close-box .selectfield { width: auto; max-width: 100%; }
+@media (prefers-reduced-motion: reduce) { .sf-chev { transition: none; } }
 .datefield { position: relative; display: grid; gap: 4px; min-width: 0; }
 .df-label { font-size: 13px; color: var(--ink-2); }
 .df-box { position: relative; display: flex; }
@@ -371,8 +389,10 @@ svg .cell { stroke: var(--surface); stroke-width: 1; }
 
 /* ---------------------------------------------------------------- ayuda */
 .cursus-bar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
-.rule { margin: 0; color: var(--ink-2); font-size: 15px; }
-.rule b { color: var(--ink); }
+.rule { margin: 0; color: var(--muted); font-size: 13.5px; }
+.rule b { color: var(--ink-2); }
+.card.rule-card { max-width: 720px; padding: 14px 18px; gap: 6px; box-shadow: none; border-color: var(--grid); background: color-mix(in srgb, var(--ink) 5%, var(--bg)); }
+.card.rule-card h3 { font: 600 14px var(--sans); color: var(--ink-2); }
 .circles { border: 0; padding: 0; margin: 0; display: grid; gap: 10px; min-width: 0; }
 .circles legend { padding: 0; margin-bottom: 8px; font-size: 13px; color: var(--muted); }
 .circle-row { display: flex; flex-wrap: wrap; gap: 8px; }

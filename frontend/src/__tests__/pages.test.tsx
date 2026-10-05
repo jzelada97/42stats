@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import Ayuda from "../pages/Ayuda";
 import Login, { errorFor } from "../pages/Login";
 import { Enso } from "../components/charts/Decor";
@@ -80,6 +80,7 @@ describe("Ayuda con texto hostil de otros alumnos", () => {
     await waitFor(() => screen.getByRole("button", { name: "Quiero ayudar" }));
     expect(screen.getByText(/Agradecimientos por confirmar/)).toBeInTheDocument();
     expect(screen.getByText(/Se han ofrecido a ayudarte/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("combobox", { name: "¿Te ayudó alguien?" }));
     expect(screen.getByRole("option", { name: "Gracias a u13" })).toBeInTheDocument();
   });
 

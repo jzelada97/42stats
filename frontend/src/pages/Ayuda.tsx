@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { TierBadge } from "../components/charts/Decor";
 import { HELP_CHANGED, Shell, type NavLink } from "../components/Shell";
+import Select from "../components/Select";
 import { Card, Section } from "../components/ui";
 import { get, post, useLoad } from "../lib/api";
 import { fmt, localTime } from "../lib/format";
@@ -75,12 +76,8 @@ function Resources({ ov, here, rank, project, setProject, isAdmin, onAdminChange
   return (
     <Section id="recursos" fold="open" hint="Guías, vídeos y herramientas por proyecto" kicker="estudiar" title="Recursos de estudio" lead="Guías, documentación, vídeos y herramientas que explican el tema. Aprobados a mano.">
       <Card>
-        <label className="inline">Proyecto
-          <select value={project} onChange={(e) => setProject(e.target.value)}>
-            <option value="">General (todo el círculo)</option>
-            {here.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-        </label>
+        <Select inline label="Proyecto" value={project} onChange={setProject}
+          options={[{ value: "", label: "General (todo el círculo)" }, ...here.map((p) => ({ value: String(p.id), label: p.name }))]} />
         <ul className="list res">
           {res.data && !res.data.resources.length && <li className="empty">Aún no hay recursos aprobados para este proyecto. Propón el primero.</li>}
           {res.data?.resources.map((r) => {
@@ -132,20 +129,13 @@ function ProposeResource({ here, onSent }: { here: Project[]; ov: Overview; onSe
     <details className="card">
       <summary>Proponer un recurso</summary>
       <form className="stack" onSubmit={submit} noValidate>
-        <label>Proyecto
-          <select value={keep(project, here.map((p) => String(p.id)), "")} onChange={(e) => setProject(e.target.value)}>
-            <option value="">General (todo el círculo)</option>
-            {here.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-        </label>
+        <Select label="Proyecto" value={keep(project, here.map((p) => String(p.id)), "")} onChange={setProject}
+          options={[{ value: "", label: "General (todo el círculo)" }, ...here.map((p) => ({ value: String(p.id), label: p.name }))]} />
         <label>Título<input type="text" maxLength={120} placeholder="Guía de punteros en C" value={title} onChange={(e) => setTitle(e.target.value)} required /></label>
         <label>Enlace (https)<input type="url" maxLength={300} placeholder="https://…" value={url} onChange={(e) => setUrl(e.target.value)} required /></label>
-        <label>Tipo
-          <select value={kind} onChange={(e) => setKind(e.target.value)}>
-            <option value="guía">Guía o tutorial</option><option value="documentación">Documentación</option>
-            <option value="vídeo">Vídeo</option><option value="herramienta">Herramienta</option><option value="otro">Otro</option>
-          </select>
-        </label>
+        <Select label="Tipo" value={kind} onChange={setKind} options={[
+          { value: "guía", label: "Guía o tutorial" }, { value: "documentación", label: "Documentación" },
+          { value: "vídeo", label: "Vídeo" }, { value: "herramienta", label: "Herramienta" }, { value: "otro", label: "Otro" }]} />
         <label className="check"><input type="checkbox" checked={ok} onChange={(e) => setOk(e.target.checked)} /> <span>Confirmo que explica el tema y <b>no contiene la solución</b> del proyecto.</span></label>
         <div className="row"><button className="btn small" type="submit">Enviar a revisión</button><span className="sub" role="status">{msg}</span></div>
       </form>
@@ -158,11 +148,7 @@ function MentorList({ here, project, setProject }: { here: Project[]; project: s
   const { data } = useLoad<{ mentors: Mentor[] }>(project ? `/api/help/mentors?project_id=${Number(project)}` : null);
   return (
     <Card title="Mentores disponibles">
-      <label className="inline">Proyecto
-        <select value={project} onChange={(e) => setProject(e.target.value)}>
-          {here.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-      </label>
+      <Select inline label="Proyecto" value={project} onChange={setProject} options={here.map((p) => ({ value: String(p.id), label: p.name }))} />
       <ul className="list mentors">
         {data && !data.mentors.length && <li className="empty">Nadie se ha ofrecido todavía en este proyecto.</li>}
         {data?.mentors.map((m) => {
@@ -382,10 +368,8 @@ function MyRequest({ r, refresh, say }: { r: MyRequest; refresh: () => Promise<v
       <div className="close-box">
         {r.responders.length > 0 && (
           <>
-            <select aria-label="¿Te ayudó alguien?" value={who} onChange={(e) => setWho(e.target.value)}>
-              <option value="">Cerrar sin agradecer</option>
-              {r.responders.map((m) => <option key={m.login} value={m.login}>Gracias a {m.login}</option>)}
-            </select>
+            <Select ariaLabel="¿Te ayudó alguien?" value={who} onChange={setWho}
+              options={[{ value: "", label: "Cerrar sin agradecer" }, ...r.responders.map((m) => ({ value: m.login, label: `Gracias a ${m.login}` }))]} />
             {who && <label className="check small"><input type="checkbox" checked={noCode} onChange={(e) => setNoCode(e.target.checked)} /> <span>Me explicó, sin darme código</span></label>}
             <p className="m">El punto del mentor cuenta cuando él confirme y tú valides este proyecto.</p>
           </>
@@ -417,11 +401,7 @@ function AskForHelp({ ov, here, project, setProject, refresh }: { ov: Overview; 
       <div className="grid2">
         <Card>
           <form className="stack" onSubmit={submit} noValidate>
-            <label>Proyecto
-              <select value={project} onChange={(e) => setProject(e.target.value)}>
-                {unvalidated.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </label>
+            <Select label="Proyecto" value={project} onChange={setProject} options={unvalidated.map((p) => ({ value: String(p.id), label: p.name }))} />
             <label>Tu pregunta
               <textarea rows={4} maxLength={280} value={message} onChange={(e) => setMessage(e.target.value)}
                 placeholder="Llevo 3 días con get_next_line: no entiendo por qué se pierde el resto del buffer entre llamadas." />
@@ -588,7 +568,7 @@ export default function Ayuda() {
     body = (
       <main>
         <Section kicker="comunidad / ayuda entre alumnos" title="Aprender juntos, sin copiar" lead="Recursos para estudiar, alumnos que ya pasaron cada proyecto y un sitio para pedir ayuda.">
-          <Card title="Una regla que no se negocia">
+          <Card className="rule-card" title="Una regla que no se negocia">
             <p className="rule">
               En 42, compartir o copiar la solución de un proyecto cuenta como <b>cheating</b>. Aquí ayudar es <b>explicar</b> conceptos, depurar con preguntas y orientar.
               {" "}<b>Nunca</b> pasar código ni enlaces a soluciones. Los recursos se revisan antes de publicarse.
