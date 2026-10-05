@@ -588,17 +588,28 @@ export default function Ayuda() {
     body = (
       <main>
         <Section kicker="comunidad / ayuda entre alumnos" title="Aprender juntos, sin copiar" lead="Recursos para estudiar, alumnos que ya pasaron cada proyecto y un sitio para pedir ayuda.">
-          <div className="notice-rule" role="note">
-            <b>Una regla que no se negocia:</b> en 42, compartir o copiar la solución de un proyecto cuenta como <b>cheating</b>. Aquí ayudar es <b>explicar</b> conceptos, depurar con preguntas y orientar. <b>Nunca</b> pasar código ni enlaces a soluciones. Los recursos se revisan antes de publicarse.
-          </div>
-          <div className="cursus-bar">
-            <label className="inline">Círculo
-              <select value={rank == null ? "none" : String(rank)} onChange={(e) => setRank(e.target.value === "none" ? null : Number(e.target.value))}>
-                {ov.ranks.map((r) => <option key={String(r.id)} value={r.id == null ? "none" : String(r.id)}>{r.name} ({r.projects})</option>)}
-              </select>
-            </label>
-            <span className="sub">Elige el círculo y cada desplegable de proyectos mostrará solo los suyos.</span>
-          </div>
+          <Card title="Una regla que no se negocia">
+            <p className="rule">
+              En 42, compartir o copiar la solución de un proyecto cuenta como <b>cheating</b>. Aquí ayudar es <b>explicar</b> conceptos, depurar con preguntas y orientar.
+              {" "}<b>Nunca</b> pasar código ni enlaces a soluciones. Los recursos se revisan antes de publicarse.
+            </p>
+          </Card>
+          <fieldset className="circles">
+            <legend>Círculo</legend>
+            <div className="circle-row">
+              {ov.ranks.map((r) => {
+                const val = r.id == null ? "none" : String(r.id);
+                return (
+                  <label className="circle" key={val}>
+                    <input type="radio" name="circulo" value={val} checked={(rank == null ? "none" : String(rank)) === val}
+                      onChange={() => setRank(r.id == null ? null : Number(r.id))} />
+                    <span>{r.name}<small>{r.projects}</small></span>
+                  </label>
+                );
+              })}
+            </div>
+            <p className="sub">Elige el círculo y cada desplegable de proyectos mostrará solo los suyos.</p>
+          </fieldset>
         </Section>
 
         <AskForHelp ov={ov} here={here} project={reqProject} setProject={setReqProject} refresh={refreshAll} />
