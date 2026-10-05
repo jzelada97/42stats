@@ -35,7 +35,7 @@ jobs:
       - run: npm run build
       - name: Dependencias de producción sin vulnerabilidades conocidas
         run: npm audit --omit=dev --audit-level=moderate
-      - name: Dependencias de desarrollo (informativo: solo corren en la máquina de quien programa)
+      - name: "Dependencias de desarrollo (informativo, solo corren en la máquina de quien programa)"
         run: npm audit || true
       - uses: actions/upload-artifact@v4
         with:
