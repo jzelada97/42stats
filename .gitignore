@@ -5,8 +5,8 @@ __pycache__/
 data/
 *.egg-info/
 .pytest_cache/
-spike/digest.json
-spike/feedbacks.json
+spike/
+scripts/explore42.py
 REPORT.md
 .env.*
 !.env.example

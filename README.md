@@ -214,7 +214,7 @@ frontend/                                       interfaz React (Vite + TypeScrip
 tests/                                          pruebas de Python
 deploy/                                         Caddy y timers de systemd (sincronización, copia, resumen)
 docs/POC.md                                     por qué existe, con datos reales
-scripts/                                        exploración de la API y cifras del POC
+scripts/                                        cifras del POC (poc_numbers.py)
 Dockerfile, docker-compose.vm.yml               imagen en dos etapas y servicios de la VM
 ```
 
