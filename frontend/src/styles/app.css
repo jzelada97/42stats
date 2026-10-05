@@ -418,7 +418,7 @@ svg .cell { stroke: var(--surface); stroke-width: 1; }
 
 /* ---------------------------------------------------------------- adaptación */
 @media (max-width: 860px) {
-  main { gap: 64px; padding-top: 36px; }
+  main { gap: 64px; padding-top: 80px; }                  /* deja sitio al botón flotante (16 px + 44 px) para que no pise el título */
   .grid2 { grid-template-columns: minmax(0, 1fr); }
   .hero, .card.cta, .status-grid { grid-template-columns: minmax(0, 1fr); }
   .brand small { display: none; }
