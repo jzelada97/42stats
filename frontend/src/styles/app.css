@@ -428,6 +428,7 @@ svg .cell { stroke: var(--surface); stroke-width: 1; }
   .login-card { padding: 32px 22px; }
   .card { padding: 20px 18px; }
   main, .foot { padding-left: 16px; padding-right: 16px; }
+  .float-in { padding: 0 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
@@ -447,8 +448,12 @@ svg .cell { stroke: var(--surface); stroke-width: 1; }
 
 /* ---------------------------------------------------------------- cabecera mínima y menú */
 .bar-actions { display: flex; gap: 10px; align-items: center; }
-.float-menu { position: fixed; top: 16px; right: 16px; z-index: 40; }
-.float-bare { position: absolute; top: 0; left: 0; right: 0; z-index: 40; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 24px; }
+/* Lo flotante se alinea con la columna del contenido (misma anchura y márgenes que `main`), no con la esquina de la ventana. */
+.float-menu { position: fixed; top: 16px; left: 0; right: 0; z-index: 40; pointer-events: none; }
+.float-bare { position: absolute; top: 0; left: 0; right: 0; z-index: 40; padding-top: 18px; }
+.float-in { max-width: 1120px; margin: 0 auto; padding: 0 24px; display: flex; justify-content: flex-end; }
+.float-in.spread { justify-content: space-between; align-items: center; gap: 16px; }
+.float-in > * { pointer-events: auto; }
 .menu-wrap { position: relative; }
 .menu a.menu-brand { padding: 6px 10px 0; font: 500 20px var(--serif); justify-content: flex-start; gap: 8px; }
 .menu a.menu-brand:hover { background: transparent; }

@@ -136,14 +136,16 @@ export function Header({ sub, links, current, showAuth = true }: { sub: string; 
   const session = useSession();
   const badge = useHelpBadge(!!session?.logged_in);
   if (session?.logged_in) {
-    return <div className="float-menu"><Menu sub={sub} sections={links} current={current} badge={badge} session={session} /></div>;
+    return <div className="float-menu"><div className="float-in"><Menu sub={sub} sections={links} current={current} badge={badge} session={session} /></div></div>;
   }
   return (
     <div className="float-bare">
-      <a className="brand" href="/">{BRAND}<small>/ {sub}</small></a>
-      <div className="bar-actions">
-        {showAuth && session && <a className="auth-link" href="/login">Entrar con 42</a>}
-        <ThemeToggle />
+      <div className="float-in spread">
+        <a className="brand" href="/">{BRAND}<small>/ {sub}</small></a>
+        <div className="bar-actions">
+          {showAuth && session && <a className="auth-link" href="/login">Entrar con 42</a>}
+          <ThemeToggle />
+        </div>
       </div>
     </div>
   );
