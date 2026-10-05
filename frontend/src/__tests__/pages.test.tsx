@@ -94,6 +94,14 @@ describe("Ayuda con texto hostil de otros alumnos", () => {
     expect(screen.getByText(/te dio las gracias al cerrarla/)).toBeInTheDocument();
   });
 
+  it("proponer un recurso avisa de que queda registrado quién lo propone", async () => {
+    mockApi();
+    render(<Ayuda />);
+    await waitFor(() => screen.getByText(/quedará registrada a tu nombre/));
+    fireEvent.click(screen.getByRole("button", { name: "Qué se guarda de tu propuesta" }));
+    expect(screen.getByText(/se sabrá quién los mandó/)).toBeInTheDocument();
+  });
+
   it("la sección de moderación solo existe para admins", async () => {
     mockApi();
     const { container } = render(<Ayuda />);

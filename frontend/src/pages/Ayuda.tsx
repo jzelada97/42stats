@@ -130,6 +130,16 @@ function ProposeResource({ here, onSent }: { here: Project[]; ov: Overview; onSe
     <details className="card">
       <summary>Proponer un recurso</summary>
       <form className="stack" onSubmit={submit} noValidate>
+        <div className="trace">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z" /><circle cx="12" cy="10" r="2.4" /></svg>
+          <span>Esta propuesta quedará registrada a tu nombre.</span>
+          <Hint label="Qué se guarda de tu propuesta">
+            <b>Quién propone queda guardado</b>
+            <span className="hint-line">Con cada propuesta se guarda tu login y el staff lo ve al revisarla. Nada se publica hasta que un admin la aprueba.</span>
+            <span className="hint-line">Piénsalo antes de enviar: los recursos troll, repetidos o poco útiles se rechazan, y se sabrá quién los mandó.</span>
+            <span className="hint-line">Que explique el tema y no contenga la solución de ningún proyecto. Se borra si borras tus datos.</span>
+          </Hint>
+        </div>
         <Select label="Proyecto" value={keep(project, here.map((p) => String(p.id)), "")} onChange={setProject}
           options={[{ value: "", label: "General (todo el círculo)" }, ...here.map((p) => ({ value: String(p.id), label: p.name }))]} />
         <label>Título<input type="text" maxLength={120} placeholder="Guía de punteros en C" value={title} onChange={(e) => setTitle(e.target.value)} required /></label>

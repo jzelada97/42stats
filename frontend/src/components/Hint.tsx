@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 /** Un «?» que explica algo: se abre al pasar el ratón, al enfocarlo con el teclado o al pulsarlo (móvil); Esc lo cierra. */
 export default function Hint({ label, children }: { label: string; children: ReactNode }) {
@@ -8,6 +8,14 @@ export default function Hint({ label, children }: { label: string; children: Rea
   const [pinned, setPinned] = useState(false);
   const [focused, setFocused] = useState(false);
   const open = hover || pinned || focused;
+  const pop = useRef<HTMLSpanElement>(null);
+  const [flip, setFlip] = useState(false);                       // si no cabe por la derecha, se abre hacia la izquierda
+
+  useLayoutEffect(() => {
+    if (!open) { setFlip(false); return; }
+    const r = pop.current?.getBoundingClientRect();
+    if (r && r.right > window.innerWidth - 12) setFlip(true);
+  }, [open]);
 
   useEffect(() => {
     if (!pinned) return;
@@ -25,7 +33,7 @@ export default function Hint({ label, children }: { label: string; children: Rea
         onKeyDown={(e) => { if (e.key === "Escape") { setPinned(false); setHover(false); setFocused(false); } }}>
         ?
       </button>
-      {open && <span className="hint-pop" role="tooltip" id={id}>{children}</span>}
+      {open && <span className={`hint-pop${flip ? " flip" : ""}`} role="tooltip" id={id} ref={pop}>{children}</span>}
     </span>
   );
 }
