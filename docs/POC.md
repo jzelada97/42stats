@@ -1,12 +1,10 @@
 # Por qué hace falta 42 Stats
 
-Datos del campus 42 Madrid a 5 de octubre de 2026. Todas las cifras son agregadas: no aparece ningún alumno concreto. Cómo las he calculado está al final, en el apéndice.
+Datos del campus 42 Madrid a 5 de octubre de 2026. Todas las cifras son agregadas: no aparece ningún alumno concreto. Cómo las he calculado está en el apéndice.
 
 ## En resumen
 
-Casi dos de cada tres alumnos que han entrado al 42cursus lo han cerrado sin graduarse, y la mayoría lo hizo tras casi un año con poco avance. Ese atasco se ve en los datos mucho antes del cierre, pero hoy el alumno no tiene una forma sencilla de verlo ni de encontrar a alguien que ya pasó por ahí. 42 Stats intenta cubrir eso. Si de verdad ayuda es algo que todavía no sé y que propongo medir.
-
-Lo que sostiene esto:
+Casi dos de cada tres alumnos que han entrado al 42cursus lo han cerrado sin graduarse, y la mayoría tras casi un año con poco avance. Ese atasco se ve en los datos mucho antes del cierre, pero hoy el alumno no tiene una forma sencilla de verlo ni de encontrar a alguien que ya pasó por ahí. 42 Stats intenta cubrir eso. Si de verdad ayuda es algo que todavía no sé y que propongo medir.
 
 - De los 2.561 alumnos que han entrado alguna vez al 42cursus, 833 siguen activos, 102 se han graduado y 1.626 cerraron el cursus sin graduarse.
 - La mitad de quienes cierran llevaban al menos un año en el cursus y no habían superado el nivel 1,9. Ocho de cada diez no pasaron del Rank 01.
@@ -15,7 +13,7 @@ Lo que sostiene esto:
 
 ## Cómo se sale de 42
 
-En 42 nadie se da de baja. Quien quiere irse deja de venir y, cuando se le acaba el plazo, el cursus se cierra por blackhole. Por eso en este documento no hablo de bajas, sino de cursus cerrados sin graduarse. La API dice cuándo se cerró cada cursus, pero no por qué, así que el motivo de cada caso no lo conozco.
+En 42 nadie se da de baja. Quien quiere irse deja de venir y, cuando se le acaba el plazo, el cursus se cierra por blackhole. Por eso uso «cursus cerrados sin graduarse» en lugar de «bajas». La API dice cuándo se cerró cada cursus, pero no por qué, así que el motivo de cada caso no lo conozco.
 
 ## Cuántos se quedan por el camino
 
@@ -45,9 +43,9 @@ Cuento como graduados a los 102 alumnos que 42 marca como alumni dentro del 42cu
 
 ## Cuándo y con qué progreso
 
-Quien cierra sin graduarse suele hacerlo pronto en el currículo, pero no deprisa: la mitad pasó al menos 361 días en el cursus y cerró con nivel 1,9 o menos. El 80 % no pasó del Rank 01 y uno de cada cinco no validó ningún rank. No sé qué pasó en cada caso. Sí sé que durante casi un año el atasco estaba a la vista en los datos.
+Quien cierra sin graduarse suele estar en los primeros ranks, tras un tiempo largo: la mitad pasó al menos 361 días en el cursus y cerró con nivel 1,9 o menos. El 80 % no pasó del Rank 01 y uno de cada cinco no validó ningún rank. Los datos no dicen qué pasó en cada caso, pero durante casi un año el atasco ya se veía.
 
-Quienes sí avanzan tardan cada vez más entre un milestone y el siguiente. Estos son los días que tarda la mediana de los alumnos que validaron ambos:
+Los que sí avanzan tardan cada vez más entre un milestone y el siguiente. Esto es lo que tarda un alumno típico (la mediana de quienes validaron los dos):
 
 | Tramo | Días |
 |---|---:|
@@ -58,27 +56,27 @@ Quienes sí avanzan tardan cada vez más entre un milestone y el siguiente. Esto
 | Rank 03 a Rank 04 | 153 |
 | Rank 04 a Rank 05 | 222 |
 
-Por eso cien días sin validar no significan lo mismo en el Rank 00 que en el Rank 04. Un aviso útil tiene que comparar al alumno con el ritmo de su promoción en ese tramo, no con una cifra fija.
+Cien días sin validar no significan lo mismo en el Rank 00 que en el Rank 04, así que un aviso con una cifra fija se equivocaría a menudo. Tiene más sentido comparar al alumno con el ritmo de su promoción en ese tramo.
 
 ## Cómo están hoy los alumnos activos
 
-De los 833 activos, 283 ya han validado los seis ranks y 104 no han validado ninguno. Los 550 restantes tienen ranks por validar: 281 (51 %) llevan más de 90 días sin validar uno y 109 (20 %) más de 180. No todos están en riesgo, porque los tramos finales duran más, pero es la población en la que miraría primero.
+De los 833 activos, 283 ya han validado los seis ranks y 104 no han validado ninguno. Los 550 restantes tienen ranks por validar: 281 (51 %) llevan más de 90 días sin validar uno y 109 (20 %) más de 180. No todos están en riesgo, porque los tramos finales duran más, pero ahí miraría primero.
 
-La fecha de blackhole que muestra la API es solo orientativa: no recoge los plazos por milestone del currículo nuevo ni los freezes. Ahora mismo hay 208 alumnos que siguen en el cursus con esa fecha ya pasada, de mediana unos cuatro meses. Por eso no la uso para decidir quién necesita ayuda.
+La fecha de blackhole que muestra la API es solo orientativa: no recoge los plazos por milestone del currículo nuevo ni los freezes. Ahora mismo hay 208 alumnos que siguen en el cursus con esa fecha ya pasada, de mediana unos cuatro meses. No me fío de ella para decidir quién necesita ayuda.
 
 ## Qué propone 42 Stats
 
-El panel personal enseña a cada alumno cómo va frente a su promoción: nivel, rank, tiempo desde el último milestone y señales de atasco, con consejos sencillos basados en reglas. Como el deadline y el freeze no están en la API pública, el alumno puede indicarlos a mano y el análisis los usa; la fecha de blackhole de la API se muestra solo como referencia.
+El panel personal enseña a cada alumno cómo va frente a su promoción: nivel, rank, tiempo desde el último milestone y señales de atasco, con consejos sencillos basados en reglas. Como el deadline y el freeze no están en la API pública, el alumno puede indicarlos a mano y el análisis los usa. La fecha de blackhole de la API se muestra solo como referencia.
 
 La ayuda entre alumnos intenta resolver que quien ya pasó un proyecto no tiene un canal ordenado para ayudar a quien se atasca. Hay recursos de estudio que se aprueban a mano antes de publicarse, mentores que han validado cada proyecto según nuestros datos, un sitio para pedir ayuda y puntos de mentoría que solo cuentan cuando el alumno ayudado valida el proyecto. Gente con experiencia hay: 283 alumnos activos han validado los seis ranks y 102 se han graduado.
 
 Las estadísticas del campus, solo con datos agregados y solo para quien ha entrado con su cuenta de 42, enseñan dónde se atascan las promociones: cierres por mes, tiempo entre milestones y proyectos que más cuestan.
 
-Todo esto ya funciona. Se alimenta cada noche de la API pública de 42 (114.564 intentos de proyecto, además de evaluaciones y sesiones de ordenador) y corre en una máquina que ya existía, con el plan gratuito de Brevo para los avisos por correo opcionales. Los detalles técnicos están en el [README](../README.md).
+La web ya está en marcha. Cada noche se actualiza con la API pública de 42 (114.564 intentos de proyecto, además de evaluaciones y sesiones de ordenador). Corre en una máquina que ya existía, y los avisos por correo, que son opcionales, usan el plan gratuito de Brevo. El [README](../README.md) tiene los detalles técnicos.
 
 ## Qué no sé todavía y cómo lo voy a medir
 
-Todavía no sé si 42 Stats ayuda a que menos gente cierre el cursus. La web lleva unos días abierta y nada de lo anterior mide su efecto. Esto es lo que propongo vigilar:
+Todavía no sé si 42 Stats ayuda a que menos gente cierre el cursus. La web lleva unos días abierta y nada de lo anterior mide su efecto. Propongo vigilar cuatro cosas:
 
 | Qué | Cómo | Buena señal |
 |---|---|---|
@@ -95,19 +93,18 @@ Propongo revisar estas cifras a los 6 y a los 12 meses, y publicar el resultado 
 
 La web pide solo el permiso `public` de la API y no guarda el token. El correo se guarda únicamente si el alumno activa los avisos. Lo individual solo lo ve el propio alumno, y lo que ve el resto son datos agregados.
 
----
-
 # Apéndice: método y cifras completas
 
 ## Qué cuento y cómo
 
-- **Fuente.** API pública de 42 sincronizada a una base local; campus 22 (Madrid), 42cursus (id 21). Cifras del 5 de octubre de 2026.
-- **Alumno.** Cuenta de tipo estudiante con registro en el 42cursus. Se excluyen las cuentas de staff y las externas.
-- **Activo.** Cursus abierto (sin cierre, o con cierre futuro) y no graduado.
-- **Graduado.** Marcado como alumni por la API. Esas cuentas conservan el cursus abierto, por eso se separan de las activas: ya no avanzan ni corre ningún plazo para ellas.
-- **Cerró sin graduarse.** Cursus cerrado y no alumni. En la práctica es un cierre por blackhole, pero la API no dice el motivo.
-- **Último rank validado.** Sale de los Common Core Rank del 42cursus. Los alumnos con los seis validados quedan fuera del cómputo de atascos.
-- **Lo que estos datos no dicen.** Describen cuándo y con qué progreso se cierra el cursus, no por qué. No hay datos individuales: el script solo imprime recuentos y medianas.
+- La fuente es la API pública de 42 sincronizada a una base local, con el campus 22 (Madrid) y el 42cursus (id 21). Las cifras son del 5 de octubre de 2026.
+- Un alumno es una cuenta de tipo estudiante con registro en el 42cursus. Las cuentas de staff y las externas quedan fuera.
+- Un alumno activo tiene el cursus abierto (sin cierre, o con cierre futuro) y no está graduado.
+- Un graduado está marcado como alumni por la API. Esas cuentas conservan el cursus abierto, así que se separan de las activas: ya no avanzan ni corre ningún plazo para ellas.
+- Cerró sin graduarse quien tiene el cursus cerrado y no es alumni. En la práctica es un cierre por blackhole, pero la API no dice el motivo.
+- El último rank validado sale de los Common Core Rank del 42cursus. Los alumnos con los seis validados quedan fuera del cómputo de atascos.
+- Los datos describen cuándo y con qué progreso se cierra el cursus. No dicen por qué.
+- No hay datos individuales: el script solo imprime recuentos y medianas.
 
 ## A quién se cuenta
 
@@ -149,7 +146,7 @@ Las promociones de 2025 y 2026 aún están dentro de plazo: su porcentaje es un 
 
 ## Cierres por mes
 
-Cursus cerrados sin graduarse, por mes de cierre (se agrupan por la fecha real de cierre, no por la de blackhole de la API). El último mes completo es septiembre de 2026.
+Cursus cerrados sin graduarse, por mes de cierre. Se agrupan por la fecha real de cierre, no por la de blackhole de la API. El último mes completo es septiembre de 2026.
 
 | Mes | Cierres | Mes | Cierres | Mes | Cierres |
 |---|---:|---|---:|---|---:|
@@ -179,7 +176,7 @@ Los últimos doce meses completos (octubre de 2025 a septiembre de 2026) suman 3
 
 ## Relación del cierre con la fecha de blackhole de la API
 
-Las tres columnas de la tabla anterior comparan la fecha de cierre con la fecha de blackhole que da la API: «en su fecha» es un cierre entre un día antes y 60 después, «antes» es más de un día antes, y «después» es más de 60 días después (o sin fecha, un caso).
+Las tres columnas de la tabla anterior comparan la fecha de cierre con la fecha de blackhole que da la API. «En su fecha» es un cierre entre un día antes y 60 después, «antes» es más de un día antes, y «después» es más de 60 días después (o sin fecha, un caso).
 
 | Relación con la fecha | Alumnos | % | Mediana |
 |---|---:|---:|---|
@@ -187,7 +184,7 @@ Las tres columnas de la tabla anterior comparan la fecha de cierre con la fecha 
 | Antes de su fecha | 553 | 34 % | 32 días antes |
 | Más de 60 días después | 305 | 19 % | 112 días después |
 
-Esto describe la fecha, no la causa. Como la API no recoge los plazos por milestone ni los freezes, no puedo decir cuál de estos tres grupos corresponde a qué. Por eso me quedo con la cifra total de cierres y no con este reparto. Además, hay 53 alumnos activos con la fecha de blackhole de la API dentro de los próximos 30 días.
+La tabla solo describe la fecha. Como la API no recoge los plazos por milestone ni los freezes, no puedo decir a qué corresponde cada grupo, y me quedo con la cifra total de cierres en lugar de este reparto. Además, hay 53 alumnos activos con la fecha de blackhole de la API dentro de los próximos 30 días.
 
 ## Reproducir las cifras
 
