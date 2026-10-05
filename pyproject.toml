@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "bandit>=1.7", "pip-audit>=2.7"]
 
 [project.scripts]
 stats42 = "stats42.cli:app"

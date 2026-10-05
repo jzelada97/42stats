@@ -249,6 +249,10 @@ copy .env.example .env              # rellena FT_UID y FT_SECRET (nunca los suba
 cd frontend; npm test                       # 65 pruebas del frontend
 ```
 
+**Integración continua** (`.github/workflows/ci.yml`, en cada push, en cada pull request y cada lunes): tipos, pruebas y compilación de la interfaz; pruebas de Python
+con la interfaz ya compilada; análisis de seguridad con **bandit**; auditoría de dependencias con **pip-audit** y `npm audit` (las de producción deben salir limpias);
+y que la imagen de Docker se construye. Para lanzar a mano lo mismo: `pip install -e ".[dev]"`, `bandit -r src -ll` y `pip-audit --skip-editable`.
+
 Cubren la sincronización y las reglas de cálculo, el login y las sesiones, la seguridad (cabeceras, límites, entradas hostiles, autorización), la ayuda y los puntos
 (incluidos los intentos de explotarlos), el borrado y la retención, las copias de seguridad (restauran de verdad), los avisos por correo y que el frontend nunca inyecte HTML.
 La suite usa la interfaz clásica por defecto; las pruebas de React usan una compilación de prueba. Las fechas de las pruebas son UTC, como el servidor.

@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"      # cada lunes: las dependencias también envejecen sin que cambie el código
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Interfaz (tipos, pruebas, compilación)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Dependencias de producción sin vulnerabilidades conocidas
+        run: npm audit --omit=dev --audit-level=moderate
+      - name: Dependencias de desarrollo (informativo: solo corren en la máquina de quien programa)
+        run: npm audit || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web_app
+          path: src/stats42/web_app
+          retention-days: 1
+
+  backend:
+    name: Servidor (pruebas, bandit, pip-audit)
+    runs-on: ubuntu-latest
+    needs: frontend
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - uses: actions/download-artifact@v4
+        with:
+          name: web_app
+          path: src/stats42/web_app       # con la interfaz compilada también corre la prueba de la compilación real contra la CSP
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[dev]"
+      - run: pytest -q
+      - name: Análisis estático de seguridad (bandit)
+        run: bandit -r src -ll
+      - name: Dependencias de Python sin vulnerabilidades conocidas
+        run: pip-audit --skip-editable
+
+  docker:
+    name: La imagen se construye
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t stats42:ci .
