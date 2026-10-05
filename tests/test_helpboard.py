@@ -265,6 +265,39 @@ def test_admin_approves_and_rejects_and_only_approved_resources_are_public(engin
     assert user(engine, store, 16).get("/api/help/resources?project_id=2").json()["resources"][0]["title"] == "Manual de gdb general"   # lo general sí
 
 
+def test_admin_can_see_who_proposes_resources_and_who_gets_rejected(engine, store):
+    troll = user(engine, store, 15)
+    good = user(engine, store, 16)
+    ids = [post(troll, "/api/help/resources", **{**GOOD, "url": f"https://example.org/t{i}", "title": f"Recurso troll {i}"}).json()["id"] for i in range(3)]
+    ok = post(good, "/api/help/resources", **{**GOOD, "url": "https://example.org/bueno", "title": "Guía muy buena de libft"}).json()["id"]
+    admin = user(engine, store, 14, cfg=ADMIN_CFG)
+    for i in ids[:2]:
+        admin.post(f"/api/admin/help/resources/{i}/reject", headers=ORIGIN, json={})
+    admin.post(f"/api/admin/help/resources/{ok}/approve", headers=ORIGIN, json={})
+    log = admin.get("/api/admin/help/resources/log").json()
+    assert [p["login"] for p in log["people"]] == ["u15", "u16"]                       # primero quien más rechazos acumula
+    u15, u16 = log["people"]
+    assert (u15["sent"], u15["rejected"], u15["pending"], u15["approved"], u15["flag"]) == (3, 2, 1, 0, True)
+    assert (u16["sent"], u16["approved"], u16["flag"]) == (1, 1, False)
+    assert len(log["recent"]) == 4 and {r["status"] for r in log["recent"]} == {"pending", "rejected", "approved"}
+    assert all(r["days"] == 0 and r["by"] in ("u15", "u16") for r in log["recent"])
+    assert admin.get("/api/admin/help/pending").json()["resources"][0]["days"] == 0     # lo pendiente también dice desde cuándo
+
+
+def test_resource_log_is_only_for_admins_and_forgets_people_who_erased_their_data(engine, store):
+    troll = user(engine, store, 15)
+    post(troll, "/api/help/resources", **GOOD)
+    assert troll.get("/api/admin/help/resources/log").status_code == 403
+    anon, _ = make_client(engine, settings_engine=store)
+    assert anon.get("/api/admin/help/resources/log").status_code == 401
+    admin = user(engine, store, 14, cfg=ADMIN_CFG)
+    rid = admin.get("/api/admin/help/pending").json()["resources"][0]["id"]
+    admin.post(f"/api/admin/help/resources/{rid}/approve", headers=ORIGIN, json={})
+    troll.post("/api/me/delete", headers=ORIGIN, json={})
+    log = admin.get("/api/admin/help/resources/log").json()
+    assert log["people"] == [] and log["recent"][0]["by"] == "(anónimo)"                 # lo aprobado se queda, pero ya no apunta a nadie
+
+
 def test_resource_submissions_are_rate_limited(engine, store):
     c = user(engine, store, 15)
     codes = [post(c, "/api/help/resources", **{**GOOD, "url": f"https://example.org/r{i}", "title": f"Recurso número {i}"}).status_code for i in range(7)]

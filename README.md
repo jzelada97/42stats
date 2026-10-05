@@ -107,6 +107,9 @@ nunca pasar código ni enlaces a soluciones.
   que los alumnos validaron justo después del proyecto, el más habitual (mínimo 3 casos). Los que no se pueden situar van a «Sin rank».
 - **Recursos.** Guías, documentación, vídeos y herramientas. Solo enlaces `https` a dominios públicos (sin IPs, puertos raros ni barras invertidas), con la casilla
   «no contiene la solución» y **aprobación manual de un administrador**. El administrador ve el dominio real al que apunta el enlace.
+  Cada propuesta **guarda el login de quien la envía** y la fecha (el formulario lo avisa con un «?»). En Moderación hay un **registro de propuestas**: por persona, cuántas
+  envió, cuántas se aprobaron y cuántas se rechazaron (con aviso si acumula rechazos), y lo último enviado. Las rechazadas se borran a los 30 días y, si alguien borra sus
+  datos, lo ya aprobado se queda sin nombre.
 - **Mentoría.** Un alumno solo puede ofrecerse como mentor en proyectos que **tiene validados según nuestros datos**; si lo pierde, desaparece. Elige qué
   proyectos enseña y puede añadir una nota (200 caracteres, sin enlaces). Los mentores ven su tramo y se ordenan por puntos.
 - **Peticiones.** Hasta 3 abiertas, una por proyecto y solo de proyectos **no validados**. Texto de 10 a 280 caracteres, sin enlaces. Caducan a los 30 días y
@@ -237,8 +240,8 @@ copy .env.example .env              # rellena FT_UID y FT_SECRET (nunca los suba
 ## Pruebas
 
 ```powershell
-.\.venv\Scripts\python -m pytest -q        # 363 pruebas de Python
-cd frontend; npm test                       # 64 pruebas del frontend
+.\.venv\Scripts\python -m pytest -q        # 366 pruebas de Python
+cd frontend; npm test                       # 65 pruebas del frontend
 ```
 
 Cubren la sincronización y las reglas de cálculo, el login y las sesiones, la seguridad (cabeceras, límites, entradas hostiles, autorización), la ayuda y los puntos

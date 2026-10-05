@@ -51,6 +51,13 @@ def _hidden(ch: str) -> bool:
     return unicodedata.category(ch)[0] == "C" or ord(ch) in _BLANKS
 
 
+def days_since(when: datetime | None) -> int | None:
+    """Días enteros desde `when` (la base guarda fechas con o sin zona)."""
+    if when is None:
+        return None
+    return max(0, (utcnow().replace(tzinfo=None) - when.replace(tzinfo=None)).days)
+
+
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -686,7 +693,32 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
             rows = db.execute(select(LearningResource).where(LearningResource.status == "pending")
                               .order_by(LearningResource.created_at).limit(100)).scalars().all()
             return {"resources": [{"id": r.id, "title": r.title, "url": r.url, "kind": r.kind, "by": r.submitted_login,
+                                   "days": days_since(r.created_at),
                                    "project": names.get(r.project_id) if r.project_id else "General"} for r in rows]}
+
+    @app.get("/api/admin/help/resources/log", dependencies=guard)
+    def resources_log(request: Request):
+        """Registro de quién propone recursos: por persona (enviados, aprobados, rechazados) y lo último enviado, sea cual sea su estado."""
+        u = current_user(request)
+        if u is None or not is_admin(u):
+            return JSONResponse({"detail": "No autorizado."}, status_code=403 if u else 401)
+        with Session(main_engine) as ms, Session(settings_db()) as db:
+            names = {o["id"]: o["name"] for o in options(ms)}
+            rows = db.execute(select(LearningResource).order_by(LearningResource.created_at.desc())).scalars().all()
+            people: dict[str, dict] = {}
+            for r in rows:
+                if not r.submitted_login:                                    # quien borró sus datos ya no está identificado
+                    continue
+                p = people.setdefault(r.submitted_login, {"login": r.submitted_login, "sent": 0, "approved": 0, "rejected": 0, "pending": 0,
+                                                          "last_days": days_since(r.created_at)})
+                p["sent"] += 1
+                p[r.status if r.status in ("approved", "rejected", "pending") else "pending"] += 1
+            for p in people.values():
+                p["flag"] = p["rejected"] >= 2 and p["rejected"] >= p["approved"]
+            ordered = sorted(people.values(), key=lambda p: (-p["rejected"], -p["sent"], p["login"]))[:30]
+            return {"people": ordered,
+                    "recent": [{"id": r.id, "title": r.title, "url": r.url, "kind": r.kind, "status": r.status, "by": r.submitted_login or "(anónimo)",
+                                "days": days_since(r.created_at), "project": names.get(r.project_id) if r.project_id else "General"} for r in rows[:40]]}
 
     @app.get("/api/admin/help/abuse", dependencies=guard)
     def abuse_list(request: Request):

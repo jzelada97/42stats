@@ -467,13 +467,14 @@ function AskForHelp({ ov, here, project, setProject, refresh }: { ov: Overview; 
 }
 
 /* ---------------------------------------------------------------- moderación */
-function Pending({ tick }: { tick: number }) {
+function Pending({ tick, onReviewed }: { tick: number; onReviewed: () => void }) {
   const { data, reload } = useLoad<{ resources: any[] }>(`/api/admin/help/pending?t=${tick}`);
   const [msg, setMsg] = useState("");
   async function act(id: number, action: "approve" | "reject") {
     try {
       await post(`/api/admin/help/resources/${Number(id)}/${action}`, {});
       await reload();
+      onReviewed();
     } catch (e) {
       setMsg((e as Error).message);
     }
@@ -489,7 +490,7 @@ function Pending({ tick }: { tick: number }) {
               <span className="chip-kind">{r.kind}</span>
               <div>
                 {href ? <a className="t" href={href} target="_blank" rel="noopener noreferrer nofollow">{r.title}</a> : <span className="t">{r.title}</span>}
-                <div className="m">{r.project} · enviado por {r.by}</div>
+                <div className="m">{r.project} · enviado por <span className="mono">{r.by}</span>{r.days == null ? "" : r.days === 0 ? " hoy" : ` hace ${r.days} ${r.days === 1 ? "día" : "días"}`}</div>
                 <div className="m mono">destino: {hostOf(r.url)} · {r.url}</div>
               </div>
               <div className="row">
@@ -505,7 +506,43 @@ function Pending({ tick }: { tick: number }) {
   );
 }
 
+const STATUS_TEXT: Record<string, string> = { pending: "pendiente", approved: "aprobado", rejected: "rechazado" };
+
+/** Quién propone recursos: lo guardamos con cada propuesta y aquí se ve de un vistazo (también quien acumula rechazos). */
+function ResourceLog({ tick }: { tick: number }) {
+  const { data } = useLoad<{ people: any[]; recent: any[] }>(`/api/admin/help/resources/log?t=${tick}`);
+  return (
+    <Card title="Registro de propuestas" sub="Quién propone o añade recursos, con cuántos y cómo han ido. Se guarda el login y la fecha de cada propuesta; las rechazadas se borran a los 30 días.">
+      {data && (
+        <>
+          <ul className="list plain">
+            {!data.people.length && <li className="empty">Todavía nadie ha propuesto nada.</li>}
+            {data.people.map((p) => (
+              <li key={p.login}>
+                <span>
+                  <span className="t mono">{p.login}</span>{" "}
+                  <span className="m">{p.sent} enviados · {p.approved} aprobados · {p.rejected} rechazados · {p.pending} pendientes · último {p.last_days === 0 ? "hoy" : `hace ${p.last_days} días`}</span>
+                </span>
+                {p.flag && <span className="m" style={{ color: "var(--warn-ink)" }}>⚠ varios rechazados</span>}
+              </li>
+            ))}
+          </ul>
+          {data.recent.length > 0 && <h3 className="mt">Lo último que se ha enviado</h3>}
+          <ul className="list plain">
+            {data.recent.map((r) => (
+              <li key={r.id}>
+                <span><span className="t">{r.title}</span> <span className="m">· {r.project} · <span className="mono">{r.by}</span> · {r.days === 0 ? "hoy" : `hace ${r.days} días`} · {hostOf(r.url)} · {STATUS_TEXT[r.status] ?? r.status}</span></span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </Card>
+  );
+}
+
 function Moderation({ tick }: { tick: number }) {
+  const [reviews, setReviews] = useState(0);
   const logins = useLoad<any>("/api/admin/logins");
   const abuse = useLoad<{ events: any[] }>("/api/admin/help/abuse");
   const points = useLoad<any>("/api/admin/help/points");
@@ -522,7 +559,8 @@ function Moderation({ tick }: { tick: number }) {
   const l = logins.data;
   return (
     <Section id="moderacion" fold="closed" hint="Recursos, mentores y puntos por revisar" kicker="administración" title="Moderación">
-      <Pending tick={tick} />
+      <Pending tick={tick} onReviewed={() => setReviews((n) => n + 1)} />
+      <ResourceLog tick={tick + reviews} />
       <Card title="Accesos a la web" sub="Alumnos distintos que han entrado con 42. Solo se guarda login y fechas (no la IP) durante 90 días. Las horas son las de tu zona.">
         {l && (
           <>

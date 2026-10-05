@@ -109,6 +109,29 @@ describe("Ayuda con texto hostil de otros alumnos", () => {
     expect(container.querySelector("#moderacion")).toBeNull();
     expect(screen.queryByText("Accesos a la web")).toBeNull();
   });
+
+  it("el registro de propuestas enseña quién propone, marca a quien acumula rechazos y pinta todo como texto", async () => {
+    mockApi({
+      "/api/help/overview": { ...overview, is_admin: true },
+      "/api/admin/help/pending": { resources: [] },
+      "/api/admin/logins": { day: 0, week: 0, month: 0, total: 0, recent: [] },
+      "/api/admin/help/abuse": { events: [] },
+      "/api/admin/help/points": { mentors: [], recent: [] },
+      "/api/admin/help/resources/log": {
+        people: [{ login: "<b>troll</b>", sent: 4, approved: 0, rejected: 3, pending: 1, last_days: 0, flag: true },
+                 { login: "ana", sent: 1, approved: 1, rejected: 0, pending: 0, last_days: 5, flag: false }],
+        recent: [{ id: 9, title: HOSTILE, url: "javascript:alert(1)", kind: "guía", status: "rejected", by: "<b>troll</b>", days: 2, project: "libft" }],
+      },
+    });
+    const { container } = render(<Ayuda />);
+    await waitFor(() => screen.getByText("Registro de propuestas"));
+    await waitFor(() => screen.getByText(/varios rechazados/));
+    expect(screen.getByText(/4 enviados · 0 aprobados · 3 rechazados · 1 pendientes · último hoy/)).toBeInTheDocument();
+    expect(container.textContent).toMatch(/hace 2 días · .* · rechazado/);
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector("script")).toBeNull();
+    expect((window as any).__pwned).toBeUndefined();
+  });
 });
 
 describe("Login", () => {
