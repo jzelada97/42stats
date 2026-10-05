@@ -3,9 +3,10 @@ import { Columns } from "../components/charts/Columns";
 import { Enso } from "../components/charts/Decor";
 import { HabitsChart, habitsSentence } from "../components/Habits";
 import { Shell, type NavLink } from "../components/Shell";
+import DateField from "../components/DateField";
 import { Card, DataTable, Disclosure, Empty, Section, Tiles } from "../components/ui";
 import { post, useLoad } from "../lib/api";
-import { fmt, fmt1, MONTHS, pct } from "../lib/format";
+import { fmt, fmt1, MONTHS, pct, poolLabel } from "../lib/format";
 
 const LINKS: NavLink[] = [];
 const STATE_ICON: Record<string, string> = { good: "✓", ok: "•", warn: "!" };
@@ -59,8 +60,8 @@ function SelfForm({ initial, onSaved }: { initial: { deadline?: string | null; f
   return (
     <Card title="Tu deadline y tu freeze" sub="42 no los publica en su API, así que indícalos tú y los usamos en el análisis. Solo los ves tú y puedes borrarlos cuando quieras.">
       <form className="self-form" onSubmit={submit} noValidate>
-        <label>Deadline de tu milestone<input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} /></label>
-        <label>Freeze hasta<input type="date" value={freeze} onChange={(e) => setFreeze(e.target.value)} /></label>
+        <DateField label="Deadline de tu milestone" value={deadline} onChange={setDeadline} />
+        <DateField label="Freeze hasta" value={freeze} onChange={setFreeze} />
         <div className="self-actions">
           <button className="btn small" type="submit">Guardar</button>
           <button className="btn small ghost" type="button" onClick={() => { setDeadline(""); setFreeze(""); void save("", ""); }}>Borrar</button>
@@ -114,7 +115,7 @@ export default function Me() {
         {d.blackhole_api ? ` Fecha de blackhole según la API: ${d.blackhole_api}.` : ""}</>}>
       <main>
         <Section kicker={`mi panel · ${d.login}`} title="Cómo vas">
-          {d.pool && <p className="updated">piscina {d.pool}</p>}
+          {d.pool && <p className="updated">Piscina: {poolLabel(d.pool)}</p>}
           <Card raise className="status">
             <div data-state={d.status.key} className="status-grid">
               <div className="status-main">

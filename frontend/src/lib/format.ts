@@ -8,6 +8,13 @@ export const pct = (r: number | null | undefined): string => (r == null ? "–" 
 export const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 export const DAYS = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"];
 
+const POOL_MONTHS: Record<string, string> = {
+  january: "enero", february: "febrero", march: "marzo", april: "abril", may: "mayo", june: "junio", july: "julio",
+  august: "agosto", september: "septiembre", october: "octubre", november: "noviembre", december: "diciembre",
+};
+/** La API da la piscina como «april 2026»; aquí se lee en español. Si no encaja, se deja tal cual. */
+export const poolLabel = (p: string): string => p.replace(/^([A-Za-z]+)(?=\s)/, (m) => POOL_MONTHS[m.toLowerCase()] ?? m);
+
 export const monthLabel = (m: string): string => `${MONTHS[+m.slice(5) - 1]} ${m.slice(2, 4)}`;
 export const dayLabel = (d: string): string => `${+d.slice(8)} ${MONTHS[+d.slice(5, 7) - 1]}`;
 export const weekLabel = dayLabel;

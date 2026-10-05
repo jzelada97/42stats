@@ -179,7 +179,8 @@ main { max-width: 1120px; margin: 0 auto; padding: 56px 24px 40px; display: grid
 .empty { color: var(--muted); font-size: 14px; padding: 18px 4px; position: relative; }
 
 /* ---------------------------------------------------------------- cifras */
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 22px 28px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+.tile { border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius-sm); background: var(--bg); padding: 14px 16px 13px; min-width: 0; }
 .tile .v { font: 500 30px/1.15 var(--serif); letter-spacing: -0.01em; }
 .tile .v small { font: 500 13px var(--sans); color: var(--muted); margin-left: 4px; }
 .tile .l { font-size: 13px; color: var(--muted); margin-top: 4px; }
@@ -214,6 +215,30 @@ legend { padding: 0 6px; font-size: 13px; color: var(--muted); }
 details > summary { cursor: pointer; color: var(--ink-2); font-size: 14px; list-style-position: inside; }
 details.card > summary { font: 500 17px var(--serif); color: var(--ink); }
 details[open] > summary { margin-bottom: 8px; }
+.datefield { position: relative; display: grid; gap: 4px; min-width: 0; }
+.df-label { font-size: 13px; color: var(--ink-2); }
+.df-box { position: relative; display: flex; }
+.df-btn { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; font: inherit; font-size: 14px; color: var(--ink); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 12px; cursor: pointer; text-align: left; transition: border-color 160ms var(--ease); }
+.df-btn:hover { border-color: var(--accent); }
+.df-btn:focus-visible, .df-clear:focus-visible, .df-nav:focus-visible, .df-day:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+.df-btn .ph { color: var(--muted); }
+.df-btn svg { flex: none; fill: none; stroke: var(--accent-ink); stroke-width: 1.6; stroke-linecap: round; }
+.df-clear { position: absolute; right: 40px; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 17px; line-height: 1; cursor: pointer; }
+.df-clear:hover { background: var(--accent-soft); color: var(--ink); }
+.df-pop { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; width: 280px; max-width: calc(100vw - 32px); display: grid; gap: 8px; padding: 14px; background: var(--raised); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow), 0 12px 32px rgba(0, 0, 0, 0.12); }
+.df-head { display: flex; align-items: center; justify-content: space-between; }
+.df-head strong { font: 500 16px var(--serif); text-transform: capitalize; }
+.df-nav { width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 50%; background: transparent; color: var(--accent-ink); font-size: 18px; line-height: 1; cursor: pointer; }
+.df-nav:hover { background: var(--accent-soft); border-color: var(--accent); }
+.df-grid { border-collapse: collapse; width: 100%; table-layout: fixed; }
+.df-grid th, .df-grid td { border: 0; }
+.df-grid th { font: 600 11px var(--sans); color: var(--muted); padding: 4px 0 6px; }
+.df-grid td { padding: 1px; text-align: center; }
+.df-day { width: 100%; aspect-ratio: 1; max-width: 34px; border: 1px solid transparent; border-radius: 50%; background: transparent; color: var(--ink); font: 13px var(--sans); cursor: pointer; }
+.df-day:hover { background: var(--accent-soft); }
+.df-day.today { border-color: var(--accent); }
+.df-day.on, .df-day.on:hover { background: var(--accent-ink); color: var(--on-accent); font-weight: 600; }
+.df-foot { display: flex; justify-content: flex-end; padding-top: 4px; border-top: 1px solid var(--grid); }
 .self-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; align-items: end; }
 .self-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; grid-column: 1 / -1; }
 
@@ -285,9 +310,9 @@ svg .cell { stroke: var(--surface); stroke-width: 1; }
 
 /* ---------------------------------------------------------------- ensō y bambú */
 .enso { display: block; }
-.enso .track { fill: none; stroke: var(--track); stroke-width: 6; stroke-linecap: round; }
-.enso .brush { fill: none; stroke: var(--accent-ink); stroke-linecap: round; }
-.enso .brush.thin { stroke: var(--accent); opacity: 0.55; }
+.enso .track { fill: var(--track); opacity: 0.8; }
+.enso .brush { fill: var(--brush, var(--accent-ink)); }
+.enso .hair { fill: none; stroke: var(--bg); stroke-width: 0.5; stroke-linecap: round; opacity: 0.5; }
 .enso text { font: 500 20px var(--serif); fill: var(--ink); }
 .enso .caption { font: 11px var(--sans); fill: var(--muted); }
 .enso-wrap { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }

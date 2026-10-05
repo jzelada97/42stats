@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
 
 /** Olas seigaiha muy tenues: solo adorno (aria-hidden), nunca detrás de texto largo. */
 export function Seigaiha({ className = "seigaiha" }: { className?: string }) {
@@ -20,30 +20,90 @@ export function Seigaiha({ className = "seigaiha" }: { className?: string }) {
   );
 }
 
-const point = (r: number, a: number): [number, number] => [50 + r * Math.sin(a), 50 - r * Math.cos(a)];
-function arc(r: number, from: number, to: number): string {
-  const [x0, y0] = point(r, from);
-  const [x1, y1] = point(r, to);
-  return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${r} ${r} 0 ${to - from > Math.PI ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+const smooth = (a: number, b: number, x: number) => {
+  const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+
+const START = 0.42;                                              // el trazo arranca arriba a la derecha y gira en sentido horario
+const SWEEP = 5.55;                                              // nunca se cierra del todo: la abertura es la gracia del ensō
+/** Punto del centro del trazo a una fracción t (0 a 1) del recorrido: el radio deriva y tiembla un poco, como una mano. */
+function centre(t: number): { x: number; y: number; nx: number; ny: number } {
+  const a = START + SWEEP * t;
+  const r = 34.5 + 3.4 * t + 0.9 * Math.sin(6.3 * t + 0.7) + 0.45 * Math.sin(15 * t + 2.1);
+  return { x: 50 + r * Math.sin(a), y: 50 - r * Math.cos(a), nx: Math.sin(a), ny: -Math.cos(a) };
 }
 
-/** Ensō: un círculo abierto que se completa con el progreso (0 a 1). Dos trazos de distinto grosor imitan el pincel. */
+/** Grosor a lo largo del trazo (u de 0 a 1 en lo dibujado): se apoya con fuerza, aligera y termina en cola fina. */
+const girth = (u: number, scale: number) =>
+  scale * (1.2 + 7.2 * smooth(0, 0.05, u) - 3.4 * u + 0.7 * Math.sin(11 * u + 1.3)) * (1 - 0.8 * smooth(0.78, 1, u));
+
+/** Contorno relleno del trazo hasta la fracción v del recorrido. */
+function brushPath(v: number, scale = 1): string {
+  const n = Math.max(10, Math.round(150 * v));
+  const left: string[] = [];
+  const right: string[] = [];
+  for (let i = 0; i <= n; i++) {
+    const u = i / n;
+    const c = centre(u * v);
+    const h = Math.max(0.35, girth(u, scale)) / 2;
+    left.push(`${(c.x + c.nx * h).toFixed(2)} ${(c.y + c.ny * h).toFixed(2)}`);
+    right.push(`${(c.x - c.nx * h).toFixed(2)} ${(c.y - c.ny * h).toFixed(2)}`);
+  }
+  return `M${left.join("L")}L${right.reverse().join("L")}Z`;
+}
+
+/** Cerdas sueltas del final del trazo: líneas finas que se despegan del centro. */
+function hairs(v: number): string[] {
+  return [-0.27, 0.05, 0.3].map((off, k) => {
+    const from = 0.5 + 0.08 * k;
+    const n = Math.max(6, Math.round(70 * v));
+    const pts: string[] = [];
+    for (let i = 0; i <= n; i++) {
+      const u = from + ((0.97 - from) * i) / n;
+      const c = centre(u * v);
+      const d = (girth(u, 1) / 2) * off * 2.4;
+      pts.push(`${(c.x + c.nx * d).toFixed(2)} ${(c.y + c.ny * d).toFixed(2)}`);
+    }
+    return `M${pts.join("L")}`;
+  });
+}
+
+const reduced = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/** Ensō: un círculo de pincel abierto que se completa con el progreso (0 a 1). */
 export function Enso({ value, label, caption, tone, size = 132 }: { value: number; label: ReactNode; caption?: string; tone?: "warn"; size?: number }) {
   const v = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
-  const [on, setOn] = useState(false);
+  const fid = useId();
+  const [shown, setShown] = useState(() => (reduced() ? v : 0));
   useEffect(() => {
-    const t = requestAnimationFrame(() => setOn(true));
-    return () => cancelAnimationFrame(t);
-  }, []);
-  const start = 0.18;
-  const end = start + 5.75 * v;                                   // nunca se cierra del todo: es la gracia del ensō
-  const anim = { strokeDasharray: 1, strokeDashoffset: on ? 0 : 1, transition: "stroke-dashoffset 900ms cubic-bezier(.22,.61,.36,1)" } as const;
-  const color = tone === "warn" ? { stroke: "var(--hi)" } : undefined;
+    if (reduced()) { setShown(v); return; }
+    let raf = 0;
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const k = Math.min(1, (now - t0) / 1100);
+      setShown(v * (1 - Math.pow(1 - k, 3)));
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [v]);
+  const ink = tone === "warn" ? ({ "--brush": "var(--hi)" } as CSSProperties) : undefined;
   return (
     <svg className="enso" viewBox="0 0 100 100" width={size} height={size} role="img" aria-label={typeof label === "string" ? `${label}${caption ? `, ${caption}` : ""}` : caption}>
-      <path className="track" d={arc(36, start, start + 5.75)} />
-      {v > 0.005 && <path className="brush" d={arc(36, start, end)} pathLength={1} strokeWidth={7} style={{ ...anim, ...color }} />}
-      {v > 0.03 && <path className="brush thin" d={arc(38.4, start + 0.12, Math.max(start + 0.2, end - 0.1))} pathLength={1} strokeWidth={2.4} style={{ ...anim, ...color }} />}
+      <defs>
+        <filter id={`${fid}-ink`} x="-10%" y="-10%" width="120%" height="120%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.55" numOctaves="2" seed="7" result="n" />
+          <feDisplacementMap in="SourceGraphic" in2="n" scale="1.7" />
+        </filter>
+      </defs>
+      <path className="track" d={brushPath(1, 0.55)} />
+      {shown > 0.01 && (
+        <g filter={`url(#${fid}-ink)`} style={ink}>
+          <path className="brush" d={brushPath(shown)} />
+          {shown > 0.3 && hairs(shown).map((d, i) => <path key={i} className="hair" d={d} />)}
+        </g>
+      )}
       <text x="50" y={caption ? 51 : 56} textAnchor="middle">{label}</text>
       {caption && <text className="caption" x="50" y="65" textAnchor="middle">{caption}</text>}
     </svg>
