@@ -39,33 +39,38 @@ Todos los datos del campus son agregados: no se muestra ninguna persona. El deta
 
 ## Arquitectura
 
+En pocas palabras: cada noche un programa copia los datos del campus desde la API pública de 42 a una base de datos propia. La web lee esa copia para calcular las
+estadísticas y, cuando un alumno entra con su cuenta de 42, le enseña las suyas. Lo que los alumnos escriben en la web (su deadline, una petición de ayuda, un recurso
+que proponen) se guarda aparte, en otras dos bases, sin mezclarse con los datos del campus.
+
 ```mermaid
 flowchart LR
-    API[API pública de 42] -->|sync diario, 2 req/s| SYNC[stats42 sync<br/>timer systemd 04:30]
-    SYNC -->|escribe, WAL| CAMPUS[(stats42.db<br/>campus)]
-    CAMPUS -->|solo lectura| WEB[FastAPI<br/>stats42 serve]
-    SETTINGS[(user_settings.db<br/>ajustes, ayuda, sesiones)] <-->|lee y escribe| WEB
-    QUARANTINE[(proposals.db<br/>cuarentena de propuestas)] <-->|lee y escribe| WEB
-    WEB -->|/static, SPA| UI[React<br/>Vite + TypeScript]
-    CADDY[Caddy<br/>HTTPS] --> WEB
-    USER((Alumno)) --> CADDY
-    WEB -->|OAuth, solo login| API
-    NOTIFY[stats42 notify<br/>timer 10:00] --> SETTINGS
-    NOTIFY -->|SMTP| BREVO[Brevo]
-    BACKUP[stats42 backup<br/>timer 07:00] --> CAMPUS
-    BACKUP --> SETTINGS
-    BACKUP --> QUARANTINE
+    API[API pública de 42] -->|cada noche| SYNC[Sincronización]
+    SYNC --> CAMPUS[(Datos del campus)]
+    CAMPUS -->|solo lectura| WEB[La web]
+    WEB <--> USERS[(Lo que escriben los alumnos)]
+    WEB <--> PROPOSALS[(Propuestas de recursos)]
+    ALUMNO((Alumno)) -->|HTTPS| WEB
+    WEB -->|solo para el login| API
+    WEB -.->|avisos opcionales| MAIL[Correo]
 ```
 
-- **Tres bases SQLite.** Cada una con un único escritor: `stats42.db` (datos del campus, la escribe la sincronización; la web la abre en solo lectura),
-  `user_settings.db` (lo que escriben los alumnos: ajustes, ayuda, sesiones, accesos; la escribe la web) y `proposals.db` (la cuarentena: solo lo que se propone
-  por el formulario de recursos, que cualquier alumno puede enviar). Así no compiten por el bloqueo y un fallo en ese formulario no puede alcanzar sesiones ni correos. WAL activado.
-- **Dos aplicaciones de 42 distintas:** la de la sincronización (`.env`) y la del login de la web (`.env.web`). 42 limita cada aplicación a 2 peticiones
-  por segundo, y si se filtrara el secreto de la web, no daría acceso a la sincronización.
-- **Backend:** FastAPI + SQLAlchemy 2 + pydantic, `httpx`, `typer` para la línea de comandos, `itsdangerous` para cookies firmadas.
-- **Interfaz:** React 19 + Vite + TypeScript, compilada a estáticos que sirve el propio FastAPI. Una sola página HTML para todas las rutas. Queda una interfaz
-  clásica (HTML y JS a mano) como reserva.
-- **Producción:** Docker en una VM, detrás de Caddy (HTTPS), sin publicar puertos. Tres timers de systemd (sincronización, copia de seguridad y resumen diario).
+Las piezas, una a una:
+
+- **Sincronización** (`stats42 sync`). Cada noche a las 04:30 pide a 42 lo que ha cambiado y lo guarda en `stats42.db`. Respeta el límite de 2 peticiones por segundo y,
+  si se corta, retoma donde se quedó.
+- **La web** (`stats42 serve`). Un servidor FastAPI que lee `stats42.db` sin poder modificarla y sirve la interfaz, hecha con React. Existe también una interfaz clásica
+  de reserva, en HTML y JavaScript a mano.
+- **Tres bases de datos**, que son tres ficheros SQLite y cada uno tiene un único escritor: `stats42.db` (los datos del campus, la escribe solo la sincronización),
+  `user_settings.db` (lo que escriben los alumnos: ajustes, ayuda, sesiones y accesos) y `proposals.db` (la cuarentena: solo lo que llega por el formulario de proponer
+  recursos, que puede enviar cualquier alumno). Así no se estorban entre sí, y un fallo en ese formulario no puede alcanzar las sesiones ni los correos.
+- **Dos aplicaciones de 42.** Una para la sincronización (`.env`) y otra para el login de la web (`.env.web`). 42 limita cada aplicación a 2 peticiones por segundo, y si
+  se filtrara el secreto de la web no daría acceso a la sincronización.
+- **Avisos por correo**, opcionales. `stats42 notify` envía cada día a las 10:00, por Brevo, el resumen a los mentores que lo activaron.
+- **Copias de seguridad.** `stats42 backup` copia las tres bases cada día a las 07:00.
+- **Producción.** Docker en una VM, detrás de Caddy (que pone el HTTPS), sin publicar puertos. La sincronización, la copia y el resumen diario son tres timers de systemd.
+- **Tecnologías.** Python con FastAPI, SQLAlchemy 2, pydantic, `httpx`, `typer` para la línea de comandos e `itsdangerous` para las cookies firmadas. En la interfaz,
+  React 19, Vite y TypeScript, compilados a ficheros estáticos que sirve el propio FastAPI.
 
 ## Datos y reglas de cálculo
 
