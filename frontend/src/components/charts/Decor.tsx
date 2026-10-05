@@ -116,10 +116,10 @@ const BADGES: Record<string, string[]> = {
   "Caña": ["M12 3v18", "M9.5 9h5", "M9.5 15h5", "M12 7c2-1 4-1 6 0", "M12 13c-2-1-4-1-6 0"],
   Bosque: ["M5 21V9", "M12 21V3", "M19 21V11", "M3.5 14h3 M10.5 9h3 M10.5 15h3 M17.5 16h3"],
 };
-export function TierBadge({ tier }: { tier: string | null | undefined }) {
+export function TierBadge({ tier, size = 20 }: { tier: string | null | undefined; size?: number }) {
   if (!tier || !BADGES[tier]) return null;
   return (
-    <svg className="tier-badge" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+    <svg className="tier-badge" viewBox="0 0 24 24" width={size} height={size} aria-hidden="true">
       {BADGES[tier].map((d) => <path key={d} d={d} />)}
     </svg>
   );

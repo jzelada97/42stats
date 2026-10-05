@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { TierBadge } from "../components/charts/Decor";
 import { HELP_CHANGED, Shell, type NavLink } from "../components/Shell";
+import Hint from "../components/Hint";
 import Select from "../components/Select";
 import { Card, Section } from "../components/ui";
 import { get, post, useLoad } from "../lib/api";
@@ -168,14 +169,49 @@ function MentorList({ here, project, setProject }: { here: Project[]; project: s
   );
 }
 
-function PointsPanel({ p }: { p: Points }) {
-  if (!p.verified && !p.pending) return null;
+const TIERS: [string, number][] = [["Brote", 1], ["Caña", 5], ["Bosque", 15]];       // los mismos tramos que points.py
+
+function PointsCard({ p }: { p: Points }) {
+  const target = p.next ? p.verified + p.next.needs : null;
   return (
-    <div className="points">
-      <div className="row"><TierBadge tier={p.tier} /><b>{p.tier || "Aún sin tramo"}</b><span className="m">{pts(p.verified)} {verified(p.verified)}</span></div>
-      {p.pending > 0 && <div className="m">{p.pending} pendientes: cuentan cuando confirmes, y quien te agradeció valide el proyecto entre 48 horas y 120 días después de pedir ayuda.</div>}
-      {p.next && <div className="m">Te faltan {p.next.needs} para {p.next.name}.</div>}
-    </div>
+    <Card className="mentor-points" title={<>Tus puntos de mentoría <Hint label="Cómo funcionan los puntos de mentoría">
+      <b>Cómo se ganan</b>
+      <span className="hint-line">Un punto cuenta cuando ayudaste de verdad: te ofreciste con «Quiero ayudar» en su petición, esa persona te dio las gracias al cerrarla marcando que le explicaste sin darle código, tú lo confirmas aquí y después valida ese proyecto (entre 48 horas y 120 días tras pedir ayuda).</span>
+      <span className="hint-line">Como máximo 2 puntos por cada alumno al que ayudes, y cada alumno puede dar 3 agradecimientos por semana.</span>
+      <span className="hint-line">Los tramos son Brote (1 punto), Caña (5) y Bosque (15). No hay ranking: es solo un reconocimiento.</span>
+      <span className="hint-line">Si se detecta algo raro, el staff puede anular un punto.</span>
+    </Hint></>}>
+      <div className="mp-top">
+        <div className="mp-now">
+          <TierBadge tier={p.tier} size={44} />
+          <div>
+            <div className="mp-tier">{p.tier || "Aún sin tramo"}</div>
+            <div className="m">{pts(p.verified)} {verified(p.verified)}</div>
+          </div>
+        </div>
+        <div className="mp-next">
+          {p.next && target ? (
+            <>
+              <div className="bar" role="img" aria-label={`${p.verified} de ${target} puntos para ${p.next.name}`}><i style={{ width: `${Math.round((p.verified / target) * 100)}%` }} /></div>
+              <div className="m">Te {p.next.needs === 1 ? "falta" : "faltan"} {p.next.needs} para {p.next.name}</div>
+            </>
+          ) : <div className="m">Has llegado al tramo más alto.</div>}
+        </div>
+      </div>
+      <ol className="mp-ladder">
+        {TIERS.map(([name, at]) => (
+          <li key={name} className={p.verified >= at ? "got" : ""}>
+            <TierBadge tier={name} size={22} /><b>{name}</b><span className="m">{pts(at)}</span>
+          </li>
+        ))}
+      </ol>
+      {(p.pending > 0 || p.to_confirm > 0) && (
+        <p className="sub">
+          {p.pending > 0 && <>{p.pending} pendiente{p.pending === 1 ? "" : "s"} de que quien te agradeció valide el proyecto. </>}
+          {p.to_confirm > 0 && <><a href="#peticiones">{p.to_confirm} por confirmar</a>.</>}
+        </p>
+      )}
+    </Card>
   );
 }
 
@@ -206,7 +242,6 @@ function OfferCard({ ov, rank, refresh }: { ov: Overview; rank: number | null; r
   }
   return (
     <Card title="Ofrecer ayuda" sub="Elige entre los proyectos que ya tienes validados. Otros alumnos podrán ver tu login, tu nivel y tu nota en ese proyecto.">
-      <PointsPanel p={ov.points} />
       <form className="stack" onSubmit={save} noValidate>
         <fieldset>
           <legend>Tus proyectos validados</legend>
@@ -587,6 +622,7 @@ export default function Ayuda() {
         <Resources ov={ov} here={here} rank={rank} project={resProject} setProject={setResProject} isAdmin={ov.is_admin} onAdminChange={() => setTick((t) => t + 1)} />
 
         <Section id="mentoria" fold="open" hint="Quién ya pasó cada proyecto, y ofrecerte tú" kicker="mentoría" title="Alumnos que ya lo pasaron" lead="Solo aparecen quienes, según nuestros datos, tienen el proyecto validado.">
+          <PointsCard p={ov.points} />
           <div className="grid2">
             <MentorList here={here} project={mentorProject} setProject={setMentorProject} />
             <OfferCard ov={ov} rank={rank} refresh={refreshAll} />

@@ -84,6 +84,16 @@ describe("Ayuda con texto hostil de otros alumnos", () => {
     expect(screen.getByRole("option", { name: "Gracias a u13" })).toBeInTheDocument();
   });
 
+  it("la tarjeta de puntos enseña el tramo, lo que falta y se explica con un «?»", async () => {
+    mockApi();
+    render(<Ayuda />);
+    await waitFor(() => screen.getByText(/Tus puntos de mentoría/));
+    expect(screen.getByText("Te faltan 4 para Caña")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /por confirmar/ })).toHaveAttribute("href", "#peticiones");
+    fireEvent.click(screen.getByRole("button", { name: /Cómo funcionan los puntos/ }));
+    expect(screen.getByText(/te dio las gracias al cerrarla/)).toBeInTheDocument();
+  });
+
   it("la sección de moderación solo existe para admins", async () => {
     mockApi();
     const { container } = render(<Ayuda />);
