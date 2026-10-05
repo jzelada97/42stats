@@ -451,7 +451,7 @@ svg .cell { stroke: var(--surface); stroke-width: 1; }
 /* Lo flotante se alinea con la columna del contenido (misma anchura y márgenes que `main`), no con la esquina de la ventana. */
 .float-menu { position: fixed; top: 16px; left: 0; right: 0; z-index: 40; pointer-events: none; }
 .float-bare { position: absolute; top: 0; left: 0; right: 0; z-index: 40; padding-top: 18px; }
-.float-in { max-width: 1120px; margin: 0 auto; padding: 0 24px; display: flex; justify-content: flex-end; }
+.float-in { max-width: 1120px; margin: 0 auto; padding: 0 24px; display: flex; justify-content: flex-start; }
 .float-in.spread { justify-content: space-between; align-items: center; gap: 16px; }
 .float-in > * { pointer-events: auto; }
 .menu-wrap { position: relative; }
@@ -464,7 +464,7 @@ svg .cell { stroke: var(--surface); stroke-width: 1; }
 .burger[data-open="1"] .l2 { opacity: 0; }
 .burger[data-open="1"] .l3 { transform: translateY(-5px) rotate(-45deg); }
 .menu-btn .dot { position: absolute; top: 8px; right: 8px; width: 10px; height: 10px; border-radius: 50%; background: var(--hi); border: 2px solid var(--bg); }
-.menu { position: absolute; right: 0; top: calc(100% + 12px); width: min(330px, calc(100vw - 32px)); background: var(--raised); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px; display: grid; gap: 4px; z-index: 30; animation: menu-in 180ms var(--ease); }
+.menu { position: absolute; left: 0; top: calc(100% + 12px); width: min(330px, calc(100vw - 32px)); background: var(--raised); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px; display: grid; gap: 4px; z-index: 30; animation: menu-in 180ms var(--ease); }
 @keyframes menu-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 .menu .who { color: var(--muted); font-size: 13px; padding: 4px 10px 10px; border-bottom: 1px solid var(--grid); margin-bottom: 4px; }
 .menu .who b { color: var(--ink); font-weight: 600; }
