@@ -7,7 +7,8 @@ from sqlalchemy.pool import StaticPool
 
 from stats42 import auth as authmod
 from stats42 import helpboard
-from stats42.db import (CursusUser, HelpRequest, LearningResource, MentorOffer, MentorProject, Project, ProjectUser, User, init_db)
+from stats42.db import (CursusUser, HelpRequest, LearningResource, MentorOffer, MentorProject, Project, ProjectUser, ResourceProposal, User, init_db,
+                        user_data_tables)
 from stats42.helpboard import MAX_OFFER_PROJECTS, MAX_OPEN_REQUESTS, clean_text, validate_url
 
 from test_auth import CFG, login, make_client
@@ -284,7 +285,7 @@ def test_admin_can_see_who_proposes_resources_and_who_gets_rejected(engine, stor
     assert admin.get("/api/admin/help/pending").json()["resources"][0]["days"] == 0     # lo pendiente también dice desde cuándo
 
 
-def test_resource_log_is_only_for_admins_and_forgets_people_who_erased_their_data(engine, store):
+def test_resource_log_is_only_for_admins_and_keeps_the_trace_of_people_who_erased_their_data(engine, store):
     troll = user(engine, store, 15)
     post(troll, "/api/help/resources", **GOOD)
     assert troll.get("/api/admin/help/resources/log").status_code == 403
@@ -292,10 +293,136 @@ def test_resource_log_is_only_for_admins_and_forgets_people_who_erased_their_dat
     assert anon.get("/api/admin/help/resources/log").status_code == 401
     admin = user(engine, store, 14, cfg=ADMIN_CFG)
     rid = admin.get("/api/admin/help/pending").json()["resources"][0]["id"]
-    admin.post(f"/api/admin/help/resources/{rid}/approve", headers=ORIGIN, json={})
-    troll.post("/api/me/delete", headers=ORIGIN, json={})
+    admin.post(f"/api/admin/help/resources/{rid}/reject", headers=ORIGIN, json={})
+    troll.post("/api/me/delete", headers=ORIGIN, json={})                                   # borrar los datos NO borra quién propuso qué
     log = admin.get("/api/admin/help/resources/log").json()
-    assert log["people"] == [] and log["recent"][0]["by"] == "(anónimo)"                 # lo aprobado se queda, pero ya no apunta a nadie
+    assert [(p["login"], p["rejected"]) for p in log["people"]] == [("u15", 1)] and log["recent"][0]["by"] == "u15"
+
+
+# ---------------------------------------------------------------- la cuarentena: aislada, sin forma de meter ni sacar nada
+
+def _stored(c):
+    with Session(c.app.state.proposals_db()) as q:
+        return [(r.title, r.url, r.kind, r.project_id, r.submitted_login) for r in q.query(ResourceProposal)]
+
+
+def _settings_rows(store):
+    with Session(store) as db:
+        return {t.name: db.execute(t.select()).fetchall() for t in user_data_tables()}
+
+
+def test_a_proposal_only_ever_touches_the_quarantine_database(engine, store):
+    c = user(engine, store, 15)
+    before = _settings_rows(store)
+    r = post(c, "/api/help/resources", **GOOD)
+    assert r.status_code == 200 and set(r.json()) == {"id", "status"}                        # la respuesta no devuelve nada más
+    assert c.app.state.proposals_db() is not store                                           # otra base, no la de sesiones, correos y puntos
+    assert _settings_rows(store) == before                                                  # ni una fila nueva en la base de ajustes
+    assert _stored(c) == [("Guía de punteros en C", "https://www.cs.cmu.edu/guia", "guía", 1, "u15")]
+    assert "resource_proposals" not in {t.name for t in user_data_tables()}                  # ni se vuelca ni se borra con la base de usuarios
+
+
+HOSTILE_TITLES = [
+    "Robert'); DROP TABLE resource_proposals;-- guía", "' OR '1'='1' -- manual de gdb", "\"; DELETE FROM user_sessions; -- apuntes",
+    "<script>fetch('/api/admin/logins')</script> apuntes", "<img src=x onerror=alert(1)> apuntes", "{{7*7}} ${7*7} #{7*7} apuntes",
+    "%s%s%s%n %d apuntes", "../../etc/passwd apuntes", "apuntes\x00con nulo", "apuntes\r\nSet-Cookie: a=b", "\u202eevil.exe apuntes",
+]
+
+
+@pytest.mark.parametrize("title", HOSTILE_TITLES)
+def test_hostile_titles_are_stored_as_inert_text_and_nothing_else_changes(engine, store, title):
+    c = user(engine, store, 15)
+    other = user(engine, store, 16)
+    before = _settings_rows(store)
+    r = post(c, "/api/help/resources", **{**GOOD, "title": title})
+    assert r.status_code in (200, 422)
+    assert r.status_code != 200 or set(r.json()) == {"id", "status"}
+    assert _settings_rows(store) == before                                                  # nada llega a la base de ajustes
+    with Session(c.app.state.proposals_db()) as q:                                           # y la cuarentena sigue entera
+        assert q.query(ResourceProposal).count() == (1 if r.status_code == 200 else 0)
+    assert other.get("/api/help/resources?project_id=1").json() == {"resources": [], "mine_pending": []}   # los demás no ven nada
+    assert user(engine, store, 16).get("/api/help/overview").status_code == 200
+
+
+@pytest.mark.parametrize("url", [
+    "https://example.org/x'; DROP TABLE resource_proposals;--", "javascript:alert(1)", "data:text/html,<script>alert(1)</script>", "file:///etc/passwd",
+    "https://user:pass@example.org/", "https://example.org:8443/x", "https://127.0.0.1/x", "https://[::1]/x", "https://0x7f.1/x", "https://localhost/x",
+    "https://exa mple.org/x", "https://example.org/\\evil", "//example.org/x", "https://ex\u0430mple.org/x", "https://example.org/\x00",
+    "ftp://example.org/x", "https://" + "a" * 400 + ".org/x",
+])
+def test_hostile_links_never_reach_the_quarantine(engine, store, url):
+    c = user(engine, store, 15)
+    r = post(c, "/api/help/resources", **{**GOOD, "url": url})
+    assert r.status_code == 422 or (r.status_code == 200 and url.startswith("https://example.org/x'"))   # la comilla en la ruta es válida: se guarda inerte
+    assert len(_stored(c)) == (1 if r.status_code == 200 else 0)
+
+
+@pytest.mark.parametrize("body", [
+    {**GOOD, "title": ["lista"]}, {**GOOD, "title": {"a": 1}}, {**GOOD, "title": None}, {**GOOD, "kind": "<b>x</b>"}, {**GOOD, "kind": "guía'; --"},
+    {**GOOD, "project_id": "1 OR 1=1"}, {**GOOD, "project_id": -1}, {**GOOD, "project_id": 10**30}, {**GOOD, "project_id": 1.5},
+    {**GOOD, "confirm_no_solution": "yes please"}, {**GOOD, "status": "approved"}, {**GOOD, "submitted_by": 1}, {"title": "solo título"}, [], "texto",
+])
+def test_malformed_or_extra_fields_are_refused_or_ignored(engine, store, body):
+    c = user(engine, store, 15)
+    r = c.post("/api/help/resources", json=body, headers=ORIGIN)
+    assert r.status_code in (200, 422)
+    for _, _, _, _, login in _stored(c):
+        assert login == "u15"                                                               # el autor sale de la sesión, nunca del cuerpo
+    with Session(c.app.state.proposals_db()) as q:
+        assert all(p.status == "pending" and p.submitted_by == 15 for p in q.query(ResourceProposal))     # y nadie puede darse por aprobado
+
+
+def test_oversized_bodies_and_other_content_types_are_refused_before_anything_is_read(engine, store):
+    c = user(engine, store, 15)
+    assert c.post("/api/help/resources", content="x" * 50_000, headers={**ORIGIN, "Content-Type": "application/json"}).status_code == 413
+    assert c.post("/api/help/resources", content="title=a&url=b", headers={**ORIGIN, "Content-Type": "application/x-www-form-urlencoded"}).status_code == 415
+    assert c.post("/api/help/resources", json=GOOD, headers={"Origin": "https://evil.example"}).status_code == 403
+    assert _stored(c) == []
+
+
+def test_nobody_can_read_other_peoples_proposals_and_only_admins_can_review(engine, store):
+    a, b = user(engine, store, 15), user(engine, store, 16)
+    rid = post(a, "/api/help/resources", **GOOD).json()["id"]
+    assert [x["title"] for x in a.get("/api/help/resources?project_id=1").json()["mine_pending"]] == ["Guía de punteros en C"]
+    assert b.get("/api/help/resources?project_id=1").json() == {"resources": [], "mine_pending": []}
+    assert b.get("/api/help/overview").status_code == 200 and "Guía de punteros" not in b.get("/api/help/overview").text
+    for path in ("/api/admin/help/pending", "/api/admin/help/resources/log"):
+        assert b.get(path).status_code == 403
+    assert b.post(f"/api/admin/help/resources/{rid}/approve", headers=ORIGIN, json={}).status_code == 403
+    assert _stored(a)[0][4] == "u15" and len(_stored(a)) == 1
+
+
+def test_approving_publishes_a_copy_without_personal_data_and_a_proposal_is_reviewed_only_once(engine, store):
+    a = user(engine, store, 15)
+    admin = user(engine, store, 14, cfg=ADMIN_CFG)
+    rid = post(a, "/api/help/resources", **GOOD).json()["id"]
+    assert admin.post(f"/api/admin/help/resources/{rid}/approve", headers=ORIGIN, json={}).json()["status"] == "approved"
+    assert admin.post(f"/api/admin/help/resources/{rid}/reject", headers=ORIGIN, json={}).status_code == 409      # ya revisada
+    assert admin.post(f"/api/admin/help/resources/{rid}/approve", headers=ORIGIN, json={}).status_code == 409     # y no se publica dos veces
+    with Session(store) as db:
+        pub = db.query(LearningResource).one()
+        assert (pub.title, pub.url, pub.submitted_by, pub.submitted_login) == ("Guía de punteros en C", "https://www.cs.cmu.edu/guia", 0, "")
+    with Session(a.app.state.proposals_db()) as q:
+        p = q.get(ResourceProposal, rid)
+        assert p.status == "approved" and p.reviewed_by == 14 and p.reviewed_at is not None and p.published_id == pub.id
+    public = user(engine, store, 16).get("/api/help/resources?project_id=1").json()["resources"]
+    assert [x["title"] for x in public] == ["Guía de punteros en C"] and set(public[0]) == {"id", "title", "url", "kind", "project_id", "project", "status"}
+
+
+def test_proposals_that_lived_in_the_settings_database_move_to_the_quarantine_once(engine, store):
+    from stats42.helpboard import migrate_legacy_resources
+
+    user(engine, store, 13)                                                                  # crea las tablas
+    with Session(store) as s, Session(user(engine, store, 14).app.state.proposals_db()) as q:
+        s.add_all([
+            LearningResource(project_id=1, title="vieja pendiente", url="https://a.example.com/x", kind="guía", submitted_by=15, submitted_login="u15", status="pending", created_at=NOW),
+            LearningResource(project_id=1, title="vieja aprobada", url="https://b.example.com/x", kind="guía", submitted_by=15, submitted_login="u15", status="approved", created_at=NOW),
+        ])
+        s.commit()
+        migrate_legacy_resources(s, q)
+        migrate_legacy_resources(s, q)                                                      # idempotente
+        assert sorted((p.title, p.status, p.submitted_login) for p in q.query(ResourceProposal)) == [("vieja aprobada", "approved", "u15"), ("vieja pendiente", "pending", "u15")]
+        assert [(r.title, r.submitted_login) for r in s.query(LearningResource)] == [("vieja aprobada", "")]      # lo publicado se queda sin nombre
 
 
 def test_resource_submissions_are_rate_limited(engine, store):
@@ -308,8 +435,8 @@ def test_html_in_text_is_stored_as_text_not_markup(engine, store):
     c = user(engine, store, 15)
     r = post(c, "/api/help/resources", **{**GOOD, "title": "<img src=x onerror=alert(1)> guía"})
     assert r.status_code == 200
-    with Session(store) as db:
-        assert db.query(LearningResource).one().title == "<img src=x onerror=alert(1)> guía"      # se guarda literal: escapar es cosa de la salida
+    with Session(c.app.state.proposals_db()) as q:
+        assert q.query(ResourceProposal).one().title == "<img src=x onerror=alert(1)> guía"      # se guarda literal: escapar es cosa de la salida
     admin = user(engine, store, 14, cfg=ADMIN_CFG)
     res = admin.get("/api/admin/help/pending")
     assert res.headers["content-type"].startswith("application/json") and res.headers["x-content-type-options"] == "nosniff"

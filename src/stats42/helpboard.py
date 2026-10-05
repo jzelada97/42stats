@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 from . import logins as loginsmod
 from . import points as pointsmod
 from .stats import RANK_RE
-from .db import (AbuseEvent, CursusUser, HelpOffer, MailPref, MentorThanks, Quest, QuestUser, HelpRequest, LearningResource, MentorOffer, MentorProject, Project, ProjectUser)
+from .db import (AbuseEvent, CursusUser, HelpOffer, MailPref, MentorThanks, Quest, QuestUser, HelpRequest, LearningResource, MentorOffer, MentorProject, Project, ProjectUser, ResourceProposal)
 from .ratelimit import RateLimiter
 
 KINDS = ("guía", "vídeo", "documentación", "herramienta", "otro")
@@ -313,7 +313,8 @@ def incoming_requests(db: Session, ms: Session, uid: int, cursus_id: int, limit:
 
 # ---------------------------------------------------------------- retención y borrado
 
-RESOURCE_REJECTED_TTL = timedelta(days=30)
+PROPOSAL_TTL = timedelta(days=365)           # el registro de quién propone se conserva un año, también si el alumno borra sus datos
+PROPOSAL_PENDING_TTL = timedelta(days=90)    # una propuesta que nadie revisó en tres meses se descarta
 ABUSE_TTL = timedelta(days=30)
 
 
@@ -321,8 +322,6 @@ def purge(db: Session) -> None:
     """Limitación del plazo de conservación: peticiones caducadas o cerradas y envíos rechazados antiguos no se guardan."""
     now = utcnow().replace(tzinfo=None)
     db.query(HelpRequest).filter((HelpRequest.created_at < now - REQUEST_TTL) | (HelpRequest.status != "open")).delete()
-    db.query(LearningResource).filter(LearningResource.status == "rejected",
-                                      LearningResource.created_at < now - RESOURCE_REJECTED_TTL).delete()
     db.query(AbuseEvent).filter(AbuseEvent.last_at < now - ABUSE_TTL).delete()
     loginsmod.purge(db)
     db.query(MentorThanks).filter(MentorThanks.created_at < now - pointsmod.PENDING_TTL,
@@ -332,8 +331,32 @@ def purge(db: Session) -> None:
     db.commit()
 
 
+def purge_proposals(q: Session) -> None:
+    """Cuarentena: el registro de propuestas se guarda un año; las que nadie revisó en tres meses se descartan."""
+    now = utcnow().replace(tzinfo=None)
+    q.query(ResourceProposal).filter(ResourceProposal.status != "pending", ResourceProposal.created_at < now - PROPOSAL_TTL).delete()
+    q.query(ResourceProposal).filter(ResourceProposal.status == "pending", ResourceProposal.created_at < now - PROPOSAL_PENDING_TTL).delete()
+    q.commit()
+
+
+def migrate_legacy_resources(s: Session, q: Session) -> None:
+    """Antes las propuestas vivían en la base de ajustes: se pasan a la cuarentena una sola vez y lo publicado se queda sin nombre."""
+    legacy = s.query(LearningResource).filter((LearningResource.status != "approved") | (LearningResource.submitted_login != "")).all()
+    for r in legacy:
+        q.add(ResourceProposal(project_id=r.project_id, title=r.title, url=r.url, kind=r.kind, submitted_by=r.submitted_by,
+                               submitted_login=r.submitted_login, status=r.status, created_at=r.created_at, reviewed_by=r.reviewed_by,
+                               published_id=r.id if r.status == "approved" else None))
+        if r.status == "approved":
+            r.submitted_by, r.submitted_login = 0, ""
+        else:
+            s.delete(r)
+    if legacy:
+        q.commit()
+        s.commit()
+
+
 def erase_user(db: Session, uid: int) -> None:
-    """Todo lo que la ayuda guarda de un alumno. Los recursos ya aprobados se quedan, pero sin su nombre."""
+    """Todo lo que la ayuda guarda de un alumno, salvo el registro de sus propuestas de recursos (ver `PROPOSAL_TTL`)."""
     db.query(MailPref).filter(MailPref.user_id == uid).delete()
     db.query(HelpOffer).filter(HelpOffer.mentor_uid == uid).delete()
     db.query(HelpOffer).filter(HelpOffer.request_id.in_(select(HelpRequest.id).where(HelpRequest.user_id == uid))).delete(synchronize_session=False)
@@ -344,13 +367,13 @@ def erase_user(db: Session, uid: int) -> None:
     db.query(AbuseEvent).filter(AbuseEvent.user_id == uid).delete()
     db.query(MentorProject).filter(MentorProject.user_id == uid).delete()
     db.query(MentorOffer).filter(MentorOffer.user_id == uid).delete()
-    db.query(LearningResource).filter(LearningResource.submitted_by == uid, LearningResource.status != "approved").delete()
-    db.query(LearningResource).filter(LearningResource.submitted_by == uid).update({"submitted_by": 0, "submitted_login": ""})
+    # Las propuestas de recursos NO se tocan aquí: viven en la cuarentena y se conservan PROPOSAL_TTL aunque el alumno borre sus datos
+    # (así nadie borra el rastro de lo que envió). Lo publicado ya no lleva nombre.
 
 
 # ---------------------------------------------------------------- rutas
 
-def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, admin_logins, origin_error, cursus_id: int = 21,
+def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, proposals_db, admin_logins, origin_error, cursus_id: int = 21,
              abuse=None, notifier=None):
     limits = {"read": RateLimiter(120, 60), "resource": RateLimiter(5, 3600), "offer": RateLimiter(20, 3600), "request": RateLimiter(10, 3600),
               "admin": RateLimiter(240, 60), "attempt": RateLimiter(60, 3600)}
@@ -402,6 +425,8 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
             if time.monotonic() - cache.get("purged", -3600.0) >= 3600:
                 cache["purged"] = time.monotonic()
                 purge(db)
+                with Session(proposals_db()) as q:
+                    purge_proposals(q)
             validated = validated_projects(ms, uid)
             offer = db.get(MentorOffer, uid)
             offered = [p for (p,) in db.execute(select(MentorProject.project_id).where(MentorProject.user_id == uid))]
@@ -452,7 +477,7 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
         u = current_user(request)
         if u is None:
             return unauth()
-        with Session(main_engine) as ms, Session(settings_db()) as db:
+        with Session(main_engine) as ms, Session(settings_db()) as db, Session(proposals_db()) as q:
             names = {o["id"]: o["name"] for o in options(ms)}
             stmt = select(LearningResource).where(LearningResource.status == "approved")
             if project_id is not None:
@@ -461,8 +486,8 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
                 of_rank = [o["id"] for o in options(ms) if o["rank"] == rank]
                 stmt = stmt.where(LearningResource.project_id.in_(of_rank) | LearningResource.project_id.is_(None))
             rows = db.execute(stmt.order_by(LearningResource.created_at.desc()).limit(60)).scalars().all()
-            mine = db.execute(select(LearningResource).where(LearningResource.submitted_by == u["uid"], LearningResource.status != "approved")
-                              .order_by(LearningResource.created_at.desc()).limit(10)).scalars().all()
+            mine = q.execute(select(ResourceProposal).where(ResourceProposal.submitted_by == u["uid"], ResourceProposal.status != "approved")
+                             .order_by(ResourceProposal.created_at.desc()).limit(10)).scalars().all()
             fmt = lambda r: {"id": r.id, "title": r.title, "url": r.url, "kind": r.kind, "project_id": r.project_id,  # noqa: E731
                              "project": names.get(r.project_id) if r.project_id else "General", "status": r.status}
             return {"resources": [fmt(r) for r in rows], "mine_pending": [fmt(r) for r in mine]}
@@ -483,17 +508,20 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
             url = validate_url(body.url)
         except ValueError as e:
             return bad(str(e))
-        with Session(main_engine) as ms, Session(settings_db()) as db:
+        # Este formulario lo puede usar cualquier alumno: lo que llega solo se guarda en la cuarentena (base aparte) y solo se lee de ella.
+        # La respuesta no devuelve nada más que el estado: no hay forma de sacar datos de aquí.
+        with Session(main_engine) as ms, Session(proposals_db()) as q, Session(settings_db()) as db:
             if body.project_id is not None and body.project_id not in {o["id"] for o in options(ms)}:
                 return bad("Ese proyecto no existe.")
-            if db.execute(select(LearningResource.id).where(LearningResource.url == url, LearningResource.status != "rejected")).first():
+            if (q.execute(select(ResourceProposal.id).where(ResourceProposal.url == url, ResourceProposal.status != "rejected")).first()
+                    or db.execute(select(LearningResource.id).where(LearningResource.url == url, LearningResource.status == "approved")).first()):
                 return bad("Ese enlace ya está en la lista o pendiente de revisión.")
             if not limits["resource"].allow(str(u["uid"])):     # solo cuentan los envíos válidos
                 return too_many(u, "ayuda-recursos")
-            r = LearningResource(project_id=body.project_id, title=title, url=url, kind=body.kind, submitted_by=u["uid"],
+            r = ResourceProposal(project_id=body.project_id, title=title, url=url, kind=body.kind, submitted_by=u["uid"],
                                  submitted_login=u["login"][:50], status="pending", created_at=utcnow())
-            db.add(r)
-            db.commit()
+            q.add(r)
+            q.commit()
             return {"id": r.id, "status": "pending"}
 
     @app.post("/api/help/offer", dependencies=guard)
@@ -688,10 +716,10 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
         u = current_user(request)
         if u is None or not is_admin(u):
             return JSONResponse({"detail": "No autorizado."}, status_code=403 if u else 401)
-        with Session(main_engine) as ms, Session(settings_db()) as db:
+        with Session(main_engine) as ms, Session(proposals_db()) as q:
             names = {o["id"]: o["name"] for o in options(ms)}
-            rows = db.execute(select(LearningResource).where(LearningResource.status == "pending")
-                              .order_by(LearningResource.created_at).limit(100)).scalars().all()
+            rows = q.execute(select(ResourceProposal).where(ResourceProposal.status == "pending")
+                             .order_by(ResourceProposal.created_at).limit(100)).scalars().all()
             return {"resources": [{"id": r.id, "title": r.title, "url": r.url, "kind": r.kind, "by": r.submitted_login,
                                    "days": days_since(r.created_at),
                                    "project": names.get(r.project_id) if r.project_id else "General"} for r in rows]}
@@ -702,13 +730,11 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
         u = current_user(request)
         if u is None or not is_admin(u):
             return JSONResponse({"detail": "No autorizado."}, status_code=403 if u else 401)
-        with Session(main_engine) as ms, Session(settings_db()) as db:
+        with Session(main_engine) as ms, Session(proposals_db()) as q:
             names = {o["id"]: o["name"] for o in options(ms)}
-            rows = db.execute(select(LearningResource).order_by(LearningResource.created_at.desc())).scalars().all()
+            rows = q.execute(select(ResourceProposal).order_by(ResourceProposal.created_at.desc())).scalars().all()
             people: dict[str, dict] = {}
             for r in rows:
-                if not r.submitted_login:                                    # quien borró sus datos ya no está identificado
-                    continue
                 p = people.setdefault(r.submitted_login, {"login": r.submitted_login, "sent": 0, "approved": 0, "rejected": 0, "pending": 0,
                                                           "last_days": days_since(r.created_at)})
                 p["sent"] += 1
@@ -717,7 +743,7 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
                 p["flag"] = p["rejected"] >= 2 and p["rejected"] >= p["approved"]
             ordered = sorted(people.values(), key=lambda p: (-p["rejected"], -p["sent"], p["login"]))[:30]
             return {"people": ordered,
-                    "recent": [{"id": r.id, "title": r.title, "url": r.url, "kind": r.kind, "status": r.status, "by": r.submitted_login or "(anónimo)",
+                    "recent": [{"id": r.id, "title": r.title, "url": r.url, "kind": r.kind, "status": r.status, "by": r.submitted_login,
                                 "days": days_since(r.created_at), "project": names.get(r.project_id) if r.project_id else "General"} for r in rows[:40]]}
 
     @app.get("/api/admin/help/abuse", dependencies=guard)
@@ -739,10 +765,19 @@ def register(app: FastAPI, *, current_user, main_engine: Engine, settings_db, ad
             return err
         if action not in ("approve", "reject") or not limits["admin"].allow(str(u["uid"])):
             return bad("Acción no válida.", 400)
-        with Session(settings_db()) as db:
-            r = db.get(LearningResource, resource_id)
+        with Session(proposals_db()) as q, Session(settings_db()) as db:
+            r = q.get(ResourceProposal, resource_id)
             if r is None:
                 return bad("No encontrado.", 404)
-            r.status, r.reviewed_by = ("approved" if action == "approve" else "rejected"), u["uid"]
-            db.commit()
+            if r.status != "pending":
+                return bad("Esa propuesta ya está revisada.", 409)
+            if action == "approve":
+                # Se publica una copia SIN datos personales; la propuesta (con quién la envió) se queda en la cuarentena.
+                pub = LearningResource(project_id=r.project_id, title=r.title, url=r.url, kind=r.kind, submitted_by=0, submitted_login="",
+                                       status="approved", created_at=utcnow(), reviewed_by=u["uid"])
+                db.add(pub)
+                db.commit()
+                r.published_id = pub.id
+            r.status, r.reviewed_by, r.reviewed_at = ("approved" if action == "approve" else "rejected"), u["uid"], utcnow()
+            q.commit()
             return {"id": r.id, "status": r.status}

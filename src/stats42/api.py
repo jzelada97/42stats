@@ -6,6 +6,7 @@ import os
 import re
 import secrets
 import threading
+import weakref
 import time
 from collections.abc import Callable, Iterator
 from datetime import date, datetime, timedelta, timezone
@@ -30,7 +31,7 @@ from .client import FortyTwoClient
 from . import logins as loginsmod
 from . import mailer as mailmod
 from .notify import Notifier
-from .db import LoginRecord, User, UserSession, UserSetting, make_engine, make_readonly_engine, user_data_tables
+from .db import LoginRecord, User, UserSession, UserSetting, make_engine, make_readonly_engine, quarantine_tables, user_data_tables
 from .ratelimit import RateLimiter
 
 log = logging.getLogger("stats42.auth")
@@ -57,6 +58,9 @@ class SettingsIn(BaseModel):
     freeze_until: date | None = None
 
 
+_TEST_QUARANTINE: "weakref.WeakKeyDictionary[Engine, Engine]" = weakref.WeakKeyDictionary()
+
+
 def create_app(
     engine: Engine | None = None,
     cursus_id: int | None = None,
@@ -64,6 +68,7 @@ def create_app(
     http: httpx.Client | None = None,
     app_client: Callable[[], FortyTwoClient] | None = None,
     settings_engine: Engine | None = None,
+    proposals_engine: Engine | None = None,
     require_login: bool | None = None,
     frontend: str | None = None,
     app_dir: Path | None = None,
@@ -122,6 +127,27 @@ def create_app(
                 table.create(e, checkfirst=True)
             store["e"] = e
         return store["e"]
+
+    def proposals_db() -> Engine:
+        """Cuarentena: base APARTE, solo para lo que proponen los alumnos. Nada de lo que llega por ahí toca la base de sesiones, correos y puntos."""
+        if "q" not in store:
+            e = proposals_engine
+            if e is None:
+                if settings_engine is not None:          # pruebas: una base en memoria propia (compartida por quien comparta la de ajustes), nunca la de ajustes
+                    from sqlalchemy import create_engine
+                    from sqlalchemy.pool import StaticPool
+
+                    e = _TEST_QUARANTINE.get(settings_engine)
+                    if e is None:
+                        e = _TEST_QUARANTINE[settings_engine] = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
+                else:
+                    e = make_engine(os.environ.get("FT_PROPOSALS_DATABASE_URL", "sqlite:///data/proposals.db"))
+            for table in quarantine_tables():
+                table.create(e, checkfirst=True)
+            with Session(e) as q, Session(settings_db()) as s:
+                helpboard.migrate_legacy_resources(s, q)
+            store["q"] = e
+        return store["q"]
 
     def cached(key: str, compute: Callable[[], Any]) -> Any:
         hit = cache.get(key)
@@ -469,7 +495,8 @@ def create_app(
         resp.delete_cookie(authmod.SESSION_COOKIE, path="/")
         return resp
 
-    helpboard.register(app, current_user=current_user, main_engine=engine, settings_db=settings_db,
+    app.state.proposals_db = proposals_db
+    helpboard.register(app, current_user=current_user, main_engine=engine, settings_db=settings_db, proposals_db=proposals_db,
                        admin_logins=cfg.admin_logins, origin_error=origin_error, cursus_id=cursus_id, abuse=abuse, notifier=notifier)
 
     def page(name: str) -> FileResponse:

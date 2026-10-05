@@ -75,7 +75,7 @@ function SelfForm({ initial, onSaved }: { initial: { deadline?: string | null; f
 function EraseCard() {
   const [msg, setMsg] = useState("");
   async function erase() {
-    if (!confirm("Se borrará todo lo que guardamos de ti en esta web y se cerrará tu sesión. ¿Seguro?")) return;
+    if (!confirm("Se borrará todo lo que guardamos de ti en esta web, salvo el registro de tus propuestas de recursos (se conserva 12 meses), y se cerrará tu sesión. ¿Seguro?")) return;
     try {
       await post("/api/me/delete", {});
       location.replace("/");
@@ -85,7 +85,7 @@ function EraseCard() {
   }
   return (
     <Card title="Tus datos en esta web"
-      sub="Aquí guardamos solo lo que tú escribes: deadline y freeze manuales, tu oferta de mentoría, tus peticiones y los recursos que envías. Si chocas con un límite de ritmo, se anota tu login y el tipo de límite durante 30 días. Para saber cuántos alumnos usan la web se guardan tu primer y último acceso y cuántas veces entras (sin IP) durante 90 días. Los agradecimientos de mentoría que das o recibes también se guardan, y se borran con el resto. Si activas los avisos por correo, guardamos tu dirección hasta que los desactives o borres tus datos. Las peticiones se borran al cerrarlas o a los 30 días. Si quieres, bórralo todo ahora y se cierra tu sesión.">
+      sub="Aquí guardamos solo lo que tú escribes: deadline y freeze manuales, tu oferta de mentoría, tus peticiones y los recursos que envías. Si chocas con un límite de ritmo, se anota tu login y el tipo de límite durante 30 días. Para saber cuántos alumnos usan la web se guardan tu primer y último acceso y cuántas veces entras (sin IP) durante 90 días. Los agradecimientos de mentoría que das o recibes también se guardan, y se borran con el resto. Si activas los avisos por correo, guardamos tu dirección hasta que los desactives o borres tus datos. Las peticiones se borran al cerrarlas o a los 30 días. Las propuestas de recursos (tu login, la fecha y cómo fueron) se guardan 12 meses aunque borres tus datos, solo para que el staff pueda atender abusos; lo que se publique no lleva tu nombre. Si quieres, bórralo todo ahora y se cierra tu sesión.">
       <div className="row"><button className="btn small ghost" type="button" onClick={erase}>Borrar mis datos</button><span className="sub" role="status">{msg}</span></div>
     </Card>
   );

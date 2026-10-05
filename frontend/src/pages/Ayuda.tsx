@@ -137,7 +137,7 @@ function ProposeResource({ here, onSent }: { here: Project[]; ov: Overview; onSe
             <b>Quién propone queda guardado</b>
             <span className="hint-line">Con cada propuesta se guarda tu login y el staff lo ve al revisarla. Nada se publica hasta que un admin la aprueba.</span>
             <span className="hint-line">Piénsalo antes de enviar: los recursos troll, repetidos o poco útiles se rechazan, y se sabrá quién los mandó.</span>
-            <span className="hint-line">Que explique el tema y no contenga la solución de ningún proyecto. Se borra si borras tus datos.</span>
+            <span className="hint-line">Que explique el tema y no contenga la solución de ningún proyecto. El registro se guarda 12 meses aunque borres tus datos, solo para el staff; lo que se publique no lleva tu nombre.</span>
           </Hint>
         </div>
         <Select label="Proyecto" value={keep(project, here.map((p) => String(p.id)), "")} onChange={setProject}
@@ -512,7 +512,7 @@ const STATUS_TEXT: Record<string, string> = { pending: "pendiente", approved: "a
 function ResourceLog({ tick }: { tick: number }) {
   const { data } = useLoad<{ people: any[]; recent: any[] }>(`/api/admin/help/resources/log?t=${tick}`);
   return (
-    <Card title="Registro de propuestas" sub="Quién propone o añade recursos, con cuántos y cómo han ido. Se guarda el login y la fecha de cada propuesta; las rechazadas se borran a los 30 días.">
+    <Card title="Registro de propuestas" sub="Quién propone o añade recursos, con cuántos y cómo han ido. Se guarda el login y la fecha de cada propuesta 12 meses, también si el alumno borra sus datos (las pendientes que nadie revise se descartan a los 3 meses).">
       {data && (
         <>
           <ul className="list plain">

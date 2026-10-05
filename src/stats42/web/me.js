@@ -115,7 +115,7 @@ document.getElementById("self-form").addEventListener("submit", (e) => {
 });
 document.getElementById("self-clear").addEventListener("click", () => saveSelf("", ""));
 document.getElementById("erase").addEventListener("click", async () => {
-  if (!confirm("Se borrará todo lo que guardamos de ti en esta web y se cerrará tu sesión. ¿Seguro?")) return;
+  if (!confirm("Se borrará todo lo que guardamos de ti en esta web, salvo el registro de tus propuestas de recursos (se conserva 12 meses), y se cerrará tu sesión. ¿Seguro?")) return;
   const msg = document.getElementById("erase-msg");
   try {
     const r = await fetch("/api/me/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });

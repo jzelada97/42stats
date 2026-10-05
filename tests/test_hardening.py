@@ -7,8 +7,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from stats42 import auth as authmod
-from stats42.db import HelpRequest, LearningResource, MentorOffer, UserSession, UserSetting
-from stats42.helpboard import MAX_MARKS, clean_text, purge, validate_url
+from stats42.db import HelpRequest, LearningResource, MentorOffer, ResourceProposal, UserSession, UserSetting
+from stats42.helpboard import MAX_MARKS, clean_text, purge, purge_proposals, validate_url
 
 from test_auth import CFG, login, make_client
 from test_auth import engine as auth_engine  # noqa: F401
@@ -108,21 +108,26 @@ def test_delete_my_data_wipes_everything_the_site_keeps_and_ends_the_session(eng
     with Session(store) as db:
         assert db.query(MentorOffer).filter_by(user_id=13).count() == 0
         assert db.query(LearningResource).filter_by(submitted_by=13).count() == 0
+    with Session(c.app.state.proposals_db()) as q:
+        assert q.query(ResourceProposal).filter_by(submitted_by=13).count() == 1                   # el rastro de lo que propuso NO se borra
         assert db.query(UserSetting).filter_by(user_id=13).count() == 0
         assert db.query(UserSession).filter_by(user_id=13).count() == 0
         assert db.query(HelpRequest).filter_by(user_id=15).count() == 1                          # lo de otros no se toca
     assert c.get("/api/me").status_code == 401
 
 
-def test_deleting_my_data_keeps_approved_resources_but_removes_my_name(engine, store):
+def test_deleting_my_data_keeps_the_public_copy_without_my_name_and_the_trace_of_who_proposed_it(engine, store):
     c = user(engine, store, 13)
     admin = user(engine, store, 14, cfg=ADMIN_CFG)
     rid = post(c, "/api/help/resources", **GOOD).json()["id"]
     post(admin, f"/api/admin/help/resources/{rid}/approve")
     post(c, "/api/me/delete")
     with Session(store) as db:
-        r = db.get(LearningResource, rid)
-        assert r.status == "approved" and r.submitted_by == 0 and r.submitted_login == ""
+        pub = db.query(LearningResource).one()
+        assert pub.status == "approved" and pub.submitted_by == 0 and pub.submitted_login == ""    # lo publicado nunca lleva nombre
+    with Session(c.app.state.proposals_db()) as q:
+        prop = q.get(ResourceProposal, rid)
+        assert prop.submitted_login == "u13" and prop.status == "approved" and prop.published_id == pub.id   # pero el staff sabe quién lo propuso
 
 
 def test_delete_my_data_needs_a_session_and_the_right_origin(engine, store):
@@ -130,7 +135,7 @@ def test_delete_my_data_needs_a_session_and_the_right_origin(engine, store):
     assert user(engine, store, 13).post("/api/me/delete", json={}, headers={"Origin": "https://evil.example"}).status_code == 403
 
 
-def test_purge_drops_old_closed_and_rejected_text(engine, store):
+def test_purge_drops_old_closed_requests(engine, store):
     old = NOW - timedelta(days=45)
     user(engine, store, 13)                                                                  # crea las tablas de la base escribible
     with Session(store) as db:
@@ -138,15 +143,27 @@ def test_purge_drops_old_closed_and_rejected_text(engine, store):
             HelpRequest(user_id=15, login="u15", project_id=1, message="caducada hace mucho tiempo", status="open", created_at=old),
             HelpRequest(user_id=16, login="u16", project_id=1, message="cerrada sin borrar por si acaso", status="closed", created_at=NOW),
             HelpRequest(user_id=12, login="u12", project_id=1, message="viva y reciente, se queda aquí", status="open", created_at=NOW),
-            LearningResource(project_id=1, title="viejo", url="https://a.example.com/x", kind="guía", submitted_by=15, submitted_login="u15",
-                             status="rejected", created_at=old),
-            LearningResource(project_id=1, title="reciente", url="https://b.example.com/x", kind="guía", submitted_by=15, submitted_login="u15",
-                             status="rejected", created_at=NOW),
         ])
         db.commit()
         purge(db)
         assert [r.login for r in db.query(HelpRequest)] == ["u12"]
-        assert [r.title for r in db.query(LearningResource)] == ["reciente"]
+
+
+def test_proposals_are_kept_a_year_after_review_and_stale_pending_ones_are_dropped_after_three_months(engine, store):
+    c = user(engine, store, 13)
+    c.get("/api/help/overview")                                                              # crea la cuarentena
+    long_ago, a_while = NOW - timedelta(days=400), NOW - timedelta(days=120)
+
+    def prop(title, status, at):
+        return ResourceProposal(project_id=1, title=title, url=f"https://example.org/{title}", kind="guía", submitted_by=15, submitted_login="u15",
+                                status=status, created_at=at)
+
+    with Session(c.app.state.proposals_db()) as q:
+        q.add_all([prop("rechazada-vieja", "rejected", long_ago), prop("rechazada-de-hace-meses", "rejected", a_while),
+                   prop("pendiente-olvidada", "pending", a_while), prop("pendiente-reciente", "pending", NOW), prop("aprobada-vieja", "approved", long_ago)])
+        q.commit()
+        purge_proposals(q)
+        assert sorted(r.title for r in q.query(ResourceProposal)) == ["pendiente-reciente", "rechazada-de-hace-meses"]
 
 
 # ---------------------------------------------------------------- texto invisible y enlaces tramposos

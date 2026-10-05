@@ -124,11 +124,12 @@ def backup(
     dest: Path = typer.Option(..., "--dest", help="Carpeta donde guardar las copias."),
     keep: int = typer.Option(14, "--keep", min=1, help="Copias que se conservan de cada base."),
 ) -> None:
-    """Copia la base del campus y la de ajustes de usuarios (comprobada, comprimida y rotada)."""
+    """Copia la base del campus, la de ajustes de usuarios y la cuarentena de propuestas (comprobada, comprimida y rotada)."""
     from .backup import backup_databases
 
     urls = [os.environ.get("FT_DATABASE_URL", "sqlite:///data/stats42.db"),
-            os.environ.get("FT_SETTINGS_DATABASE_URL", "sqlite:///data/user_settings.db")]
+            os.environ.get("FT_SETTINGS_DATABASE_URL", "sqlite:///data/user_settings.db"),
+            os.environ.get("FT_PROPOSALS_DATABASE_URL", "sqlite:///data/proposals.db")]
     try:
         made = backup_databases(urls, dest, keep)
     except Exception as e:      # una copia mala debe hacer fallar el servicio para que el timer lo deje registrado

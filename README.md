@@ -47,6 +47,7 @@ flowchart LR
     SYNC -->|escribe, WAL| CAMPUS[(stats42.db<br/>campus)]
     CAMPUS -->|solo lectura| WEB[FastAPI<br/>stats42 serve]
     SETTINGS[(user_settings.db<br/>ajustes, ayuda, sesiones)] <-->|lee y escribe| WEB
+    QUARANTINE[(proposals.db<br/>cuarentena de propuestas)] <-->|lee y escribe| WEB
     WEB -->|/static, SPA| UI[React<br/>Vite + TypeScript]
     CADDY[Caddy<br/>HTTPS] --> WEB
     USER((Alumno)) --> CADDY
@@ -55,10 +56,12 @@ flowchart LR
     NOTIFY -->|SMTP| BREVO[Brevo]
     BACKUP[stats42 backup<br/>timer 07:00] --> CAMPUS
     BACKUP --> SETTINGS
+    BACKUP --> QUARANTINE
 ```
 
-- **Dos bases SQLite**, cada una con un único escritor: `stats42.db` (datos del campus, la escribe la sincronización; la web la abre en solo lectura)
-  y `user_settings.db` (lo que escriben los alumnos: ajustes, ayuda, sesiones, accesos; la escribe la web). Así no compiten por el bloqueo. WAL activado.
+- **Tres bases SQLite**, cada una con un único escritor: `stats42.db` (datos del campus, la escribe la sincronización; la web la abre en solo lectura),
+  `user_settings.db` (lo que escriben los alumnos: ajustes, ayuda, sesiones, accesos; la escribe la web) y `proposals.db` (la cuarentena: solo lo que se propone
+  por el formulario de recursos, que cualquier alumno puede enviar). Así no compiten por el bloqueo y un fallo en ese formulario no puede alcanzar sesiones ni correos. WAL activado.
 - **Dos aplicaciones de 42 distintas:** la de la sincronización (`.env`) y la del login de la web (`.env.web`). 42 limita cada aplicación a 2 peticiones
   por segundo, y si se filtrara el secreto de la web, no daría acceso a la sincronización.
 - **Backend:** FastAPI + SQLAlchemy 2 + pydantic, `httpx`, `typer` para la línea de comandos, `itsdangerous` para cookies firmadas.
@@ -108,8 +111,9 @@ nunca pasar código ni enlaces a soluciones.
 - **Recursos.** Guías, documentación, vídeos y herramientas. Solo enlaces `https` a dominios públicos (sin IPs, puertos raros ni barras invertidas), con la casilla
   «no contiene la solución» y **aprobación manual de un administrador**. El administrador ve el dominio real al que apunta el enlace.
   Cada propuesta **guarda el login de quien la envía** y la fecha (el formulario lo avisa con un «?»). En Moderación hay un **registro de propuestas**: por persona, cuántas
-  envió, cuántas se aprobaron y cuántas se rechazaron (con aviso si acumula rechazos), y lo último enviado. Las rechazadas se borran a los 30 días y, si alguien borra sus
-  datos, lo ya aprobado se queda sin nombre.
+  envió, cuántas se aprobaron y cuántas se rechazaron (con aviso si acumula rechazos), y lo último enviado. Las propuestas viven en una **base aparte, la cuarentena** (`proposals.db`): lo que llega por ese formulario no toca nunca la base de sesiones, correos y puntos, y
+  la respuesta no devuelve nada más que el estado. Al aprobar, se publica una copia **sin datos personales**. El registro de quién propone se conserva **12 meses**
+  aunque el alumno borre sus datos (una pendiente que nadie revisa se descarta a los 3 meses).
 - **Mentoría.** Un alumno solo puede ofrecerse como mentor en proyectos que **tiene validados según nuestros datos**; si lo pierde, desaparece. Elige qué
   proyectos enseña y puede añadir una nota (200 caracteres, sin enlaces). Los mentores ven su tramo y se ordenan por puntos.
 - **Peticiones.** Hasta 3 abiertas, una por proyecto y solo de proyectos **no validados**. Texto de 10 a 280 caracteres, sin enlaces. Caducan a los 30 días y
@@ -152,7 +156,7 @@ escribe o genera al usar la web:**
 | Deadline y freeze indicados a mano | El análisis personal | Hasta que los borres |
 | Oferta de mentoría y notas | Aparecer como mentor | Hasta que la quites |
 | Peticiones de ayuda y ofertas a ellas | Conectar con mentores | Se borran al cerrarlas o a los 30 días |
-| Recursos enviados | Revisión | Aprobados: se quedan sin tu nombre si borras tus datos; rechazados: 30 días |
+| Propuestas de recursos (login, fecha, estado) | Revisión y atender abusos | 12 meses, también si borras tus datos; lo publicado nunca lleva tu nombre |
 | Agradecimientos y puntos | Puntos de mentoría | Los no completados caducan al año; si borras tus datos, lo ya verificado se conserva **anónimo** |
 | Registro de accesos | Saber cuántos alumnos usan la web | Primer y último acceso y número de entradas, **sin IP**, 90 días |
 | Límites alcanzados | Detectar abusos | Login y tipo, **sin IP**, 30 días |
@@ -183,6 +187,7 @@ Variables de entorno (prefijo `FT_`). `.env` (sincronización) y `.env.web` (web
 | `FT_CAMPUS_ID` / `FT_CURSUS_ID` | Campus y cursus | 22 / 21 |
 | `FT_DATABASE_URL` | Base del campus | `sqlite:///data/stats42.db` |
 | `FT_SETTINGS_DATABASE_URL` | Base de lo que escriben los alumnos | `sqlite:///data/user_settings.db` |
+| `FT_PROPOSALS_DATABASE_URL` | Cuarentena de las propuestas de recursos | `sqlite:///data/proposals.db` |
 | `FT_SESSION_SECRET` | Firma las cookies. Cadena aleatoria larga: `python -c "import secrets; print(secrets.token_urlsafe(48))"` | — |
 | `FT_BASE_URL` | URL pública, p. ej. `https://42madrid.zelada.es` (origen permitido y enlaces de los correos) | — |
 | `FT_REDIRECT_URI` | Dirección de retorno de OAuth si no es `FT_BASE_URL/auth/callback` | derivada |
@@ -240,7 +245,7 @@ copy .env.example .env              # rellena FT_UID y FT_SECRET (nunca los suba
 ## Pruebas
 
 ```powershell
-.\.venv\Scripts\python -m pytest -q        # 366 pruebas de Python
+.\.venv\Scripts\python -m pytest -q        # 415 pruebas de Python
 cd frontend; npm test                       # 65 pruebas del frontend
 ```
 

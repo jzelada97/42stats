@@ -189,6 +189,28 @@ class LearningResource(Base):
     reviewed_by: Mapped[int | None] = mapped_column(Integer)
 
 
+class ResourceProposal(Base):
+    """Lo que un alumno propone por el formulario de recursos, en una base APARTE (cuarentena): no se publica hasta que un administrador lo aprueba.
+
+    Guarda quién propone (login y fecha) para poder atender abusos; sobrevive al borrado de datos del alumno durante `PROPOSAL_TTL`.
+    Al aprobarla, el administrador publica una copia sin datos personales en `learning_resources`.
+    """
+
+    __tablename__ = "resource_proposals"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int | None] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(120))
+    url: Mapped[str] = mapped_column(String(300), index=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    submitted_by: Mapped[int] = mapped_column(Integer, index=True)
+    submitted_login: Mapped[str] = mapped_column(String(50))
+    status: Mapped[str] = mapped_column(String(10), default="pending", index=True)   # pending | approved | rejected
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reviewed_by: Mapped[int | None] = mapped_column(Integer)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    published_id: Mapped[int | None] = mapped_column(Integer)
+
+
 class MentorOffer(Base):
     """Un alumno que se ofrece a ayudar. Solo se muestra si sigue teniendo validados los proyectos que ofrece."""
 
@@ -298,6 +320,11 @@ def user_data_tables():
     return [UserSetting.__table__, LearningResource.__table__, MentorOffer.__table__, MentorProject.__table__,
             HelpRequest.__table__, UserSession.__table__, AbuseEvent.__table__,
             LoginRecord.__table__, MentorThanks.__table__, HelpOffer.__table__, MailPref.__table__]
+
+
+def quarantine_tables():
+    """Tablas de la base de cuarentena (`proposals.db`): lo que llega de formularios abiertos a todos los alumnos."""
+    return [ResourceProposal.__table__]
 
 
 class SyncState(Base):

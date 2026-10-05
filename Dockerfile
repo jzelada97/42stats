@@ -24,7 +24,8 @@ RUN pip install --upgrade pip && pip install .
 RUN useradd --system --uid 1000 app && mkdir /data && chown app /data
 USER app
 ENV FT_DATABASE_URL=sqlite:////data/stats42.db \
-    FT_SETTINGS_DATABASE_URL=sqlite:////data/user_settings.db
+    FT_SETTINGS_DATABASE_URL=sqlite:////data/user_settings.db \
+    FT_PROPOSALS_DATABASE_URL=sqlite:////data/proposals.db
 VOLUME /data
 
 ENTRYPOINT ["stats42"]
