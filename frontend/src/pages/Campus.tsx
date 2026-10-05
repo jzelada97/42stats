@@ -358,7 +358,7 @@ function Events() {
 export default function Campus() {
   const active = useActiveSection(SECTION_IDS);
   return (
-    <Shell sub="campus 22" links={LINKS} current={active} foot="Solo datos agregados: no se muestra ninguna persona. Fuente: API pública de 42, sincronizada cada noche.">
+    <Shell sub="campus Madrid" links={LINKS} current={active} foot="Solo datos agregados: no se muestra ninguna persona. Fuente: API pública de 42, sincronizada cada noche.">
       <main>
         <Section id="resumen" kicker="campus / resumen" title="Cómo está el campus hoy">
           <Overview />
