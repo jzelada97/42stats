@@ -126,6 +126,10 @@ body {
   margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 var(--sans);
   -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
 }
+
+/* La página ocupa como mínimo toda la ventana y el contenido se estira: el pie queda abajo sin provocar scroll cuando el contenido es corto (portada). */
+#root { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+#root > main { flex: 1; }
 a { color: var(--accent-ink); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 a:hover { text-decoration-thickness: 2px; }
 :focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 3px; border-radius: 6px; }
@@ -162,10 +166,15 @@ main { max-width: 1120px; margin: 0 auto; padding: 84px 24px 40px; display: grid
 .stack { display: grid; gap: 12px; margin-top: 10px; }
 .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .foot { max-width: 1120px; margin: 0 auto; padding: 32px 24px 64px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--border); }
-.konjo { max-width: 1120px; margin: 0 auto; padding: 8px 24px 56px; display: flex; align-items: center; gap: 14px; color: var(--muted); font-size: 13px; }
-.konjo img { display: block; width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--border); }
-.konjo p { margin: 0; }
-.konjo p a { color: var(--accent-ink); }
+.konjo { max-width: 1120px; margin: 0 auto; padding: 0 24px 30px; display: flex; justify-content: center; }
+.konjo-link { display: flex; flex-direction: column; align-items: center; gap: 10px; text-decoration: none; }
+.konjo img { display: block; width: 44px; height: 44px; border-radius: 11px; border: 1px solid var(--border); transition: transform 240ms var(--ease); }
+/* La tipografía de la web de Konjō: Helvetica Neue / Segoe UI, peso ligero, mayúsculas y letras muy espaciadas (el text-indent compensa el espacio final para centrar). */
+.konjo-line { font: 300 0.75rem/1.2 "Helvetica Neue", "Segoe UI", Arial, sans-serif; letter-spacing: 0.42em; text-indent: 0.42em; text-transform: uppercase; color: var(--ink-2); transition: color 240ms var(--ease); }
+.konjo-link:hover img { transform: translateY(-2px); }
+.konjo-link:hover .konjo-line, .konjo-link:focus-visible .konjo-line { color: var(--accent-ink); }
+.konjo-link:focus-visible { outline: none; }
+@media (prefers-reduced-motion: reduce) { .konjo img, .konjo-line { transition: none; } }
 
 /* ---------------------------------------------------------------- tarjetas suaves */
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px 26px; display: grid; gap: 12px; min-width: 0; align-content: start; box-shadow: var(--shadow); }
@@ -406,8 +415,8 @@ svg .cell { stroke: var(--surface); stroke-width: 1; }
 .sig-val { font: 500 24px var(--serif); }
 
 /* ---------------------------------------------------------------- acceso */
-.login-wrap { min-height: calc(100vh - 112px); box-sizing: border-box; display: grid; place-items: center; padding-top: 84px; }
-.login-card { position: relative; overflow: hidden; max-width: 640px; width: 100%; padding: 44px 40px 40px; gap: 18px; }
+.login-wrap { box-sizing: border-box; display: grid; place-items: center; padding-top: 64px; padding-bottom: 8px; }
+.login-card { position: relative; overflow: hidden; max-width: 640px; width: 100%; padding: 32px 40px 28px; gap: 16px; }
 .login-card > *:not(.seigaiha) { position: relative; }
 .login-points { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 12px; font-size: 14px; color: var(--ink-2); }
 .login-error { padding: 12px 16px; border-radius: var(--radius-sm); background: var(--danger-soft); color: var(--danger-ink); font-size: 14px; border: 1px solid color-mix(in srgb, var(--danger-ink) 35%, transparent); }

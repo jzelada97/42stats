@@ -154,14 +154,11 @@ export function Header({ sub, links, current, showAuth = true }: { sub: string; 
 /** Otra app del autor, al pie de todas las páginas. El logo se sirve desde esta misma web (la CSP no deja cargar imágenes de fuera). */
 function KonjoNote() {
   return (
-    <aside className="konjo" aria-label="Konjō">
-      <a href="https://konjo.com.es" target="_blank" rel="noopener noreferrer" aria-hidden="true" tabIndex={-1}>
-        <img src="/static/konjo.png" alt="" width="40" height="40" />
+    <aside className="konjo">
+      <a className="konjo-link" href="https://konjo.com.es" target="_blank" rel="noopener noreferrer">
+        <span className="konjo-line">Prueba Konjō</span>
+        <img src="/static/konjo.png" alt="" width="44" height="44" />
       </a>
-      <p>
-        Y si quieres ser productivo en el campus y fuera de él, puedes probar{" "}
-        <a href="https://konjo.com.es" target="_blank" rel="noopener noreferrer">Konjō</a>: pronto en Google Play.
-      </p>
     </aside>
   );
 }

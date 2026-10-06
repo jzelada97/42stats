@@ -45,15 +45,15 @@ describe("cabecera mínima", () => {
     expect(screen.getByRole("button", { name: /Tema/ })).toBeInTheDocument();
   });
 
-  it("al pie de cada página recomienda Konjō, con enlace seguro y el logo servido por la propia web", async () => {
+  it("al pie de cada página enseña el logo de Konjō con «Prueba Konjō», todo en un enlace seguro, con el logo servido por la propia web", async () => {
     mockSession(true);
     const { container } = page();
-    const link = await screen.findByRole("link", { name: "Konjō" });
+    const link = await screen.findByRole("link", { name: "Prueba Konjō" });
     expect(link).toHaveAttribute("href", "https://konjo.com.es");
     expect(link).toHaveAttribute("target", "_blank");
     expect(link.getAttribute("rel")).toBe("noopener noreferrer");
-    expect(container.querySelector(".konjo img")).toHaveAttribute("src", "/static/konjo.png");   // misma procedencia: la CSP no deja imágenes de fuera
-    expect(screen.getByText(/pronto en Google Play/)).toBeInTheDocument();
+    expect(link.querySelector("img")).toHaveAttribute("src", "/static/konjo.png");                 // misma procedencia: la CSP no deja imágenes de fuera
+    expect(container.querySelectorAll(".konjo a")).toHaveLength(1);
   });
 
   it("Escape lo cierra y devuelve el foco al botón", async () => {
