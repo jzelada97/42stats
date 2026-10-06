@@ -85,9 +85,9 @@ def test_smtp_sends_over_starttls_with_login_and_marks_the_mail_as_automatic(mon
         def send_message(self, msg):
             log.append(("msg", msg["To"], msg["Subject"], msg["Auto-Submitted"], msg["From"], msg.get_content()))
     monkeypatch.setattr(smtplib, "SMTP", FakeSMTP)
-    SmtpMailer(SmtpConfig("smtp.example.com", 587, "user", "pw", "42stats <avisos@zelada.es>")).send("ana@x.es", "Hola", "cuerpo")
+    SmtpMailer(SmtpConfig("smtp.example.com", 587, "user", "pw", "42stats <avisos@tudominio.es>")).send("ana@x.es", "Hola", "cuerpo")
     assert log[0] == ("conn", "smtp.example.com", 587, 15) and log[1:3] == ["tls", ("login", "user")]
-    assert log[3][1:5] == ("ana@x.es", "Hola", "auto-generated", "42stats <avisos@zelada.es>") and "cuerpo" in log[3][5]
+    assert log[3][1:5] == ("ana@x.es", "Hola", "auto-generated", "42stats <avisos@tudominio.es>") and "cuerpo" in log[3][5]
 
 
 def test_header_injection_is_impossible(monkeypatch):
@@ -365,9 +365,9 @@ def test_reply_to_is_set_only_when_configured_and_valid(monkeypatch):
         def send_message(self, msg):
             sent.append(msg["Reply-To"])
     monkeypatch.setattr(smtplib, "SMTP", FakeSMTP)
-    SmtpMailer(SmtpConfig("h", 587, "u", "p", "42stats <avisos@zelada.es>", "jose@zelada.es")).send("ana@x.es", "s", "b")
-    SmtpMailer(SmtpConfig("h", 587, "u", "p", "42stats <avisos@zelada.es>")).send("ana@x.es", "s", "b")
-    SmtpMailer(SmtpConfig("h", 587, "u", "p", "42stats <avisos@zelada.es>", "mal\nBcc: x@y.com")).send("ana@x.es", "s", "b")
-    assert sent == ["jose@zelada.es", None, None]
-    monkeypatch.setenv("FT_MAIL_REPLY_TO", "jose@zelada.es")
-    assert SmtpConfig.from_env().reply_to == "jose@zelada.es"
+    SmtpMailer(SmtpConfig("h", 587, "u", "p", "42stats <avisos@tudominio.es>", "tu@tudominio.es")).send("ana@x.es", "s", "b")
+    SmtpMailer(SmtpConfig("h", 587, "u", "p", "42stats <avisos@tudominio.es>")).send("ana@x.es", "s", "b")
+    SmtpMailer(SmtpConfig("h", 587, "u", "p", "42stats <avisos@tudominio.es>", "mal\nBcc: x@y.com")).send("ana@x.es", "s", "b")
+    assert sent == ["tu@tudominio.es", None, None]
+    monkeypatch.setenv("FT_MAIL_REPLY_TO", "tu@tudominio.es")
+    assert SmtpConfig.from_env().reply_to == "tu@tudominio.es"

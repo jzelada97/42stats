@@ -35,7 +35,7 @@ class AuthConfig:
     uid: str = ""
     secret: str = ""
     session_secret: str = ""
-    base_url: str = ""            # p. ej. https://42madrid.zelada.es (sin barra final)
+    base_url: str = ""            # p. ej. https://tu-dominio.example (sin barra final)
     admin_logins: frozenset = frozenset()
     probe_dir: str | None = None  # si existe, el sondeo de un admin escribe aquí su resultado
     redirect_override: str = ""   # dirección de retorno registrada en 42, si no es BASE_URL/auth/callback

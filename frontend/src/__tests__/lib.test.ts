@@ -28,7 +28,7 @@ describe("safeUrl", () => {
 
 describe("profileUrl e internalPath", () => {
   it("solo logins de 42 válidos", () => {
-    expect(profileUrl("jzelada-")).toBe("https://profile.intra.42.fr/users/jzelada-");
+    expect(profileUrl("ana-42-")).toBe("https://profile.intra.42.fr/users/ana-42-");
     for (const bad of ["", "a", "x/../y", "a b", "<img>", "javascript:1", "a".repeat(40)]) expect(profileUrl(bad)).toBe("");
     expect(profileUrl(null)).toBe("");
   });

@@ -6,6 +6,12 @@ del campus y una sección de ayuda entre alumnos (recursos, mentores que ya vali
 
 En producción: <https://42madrid.zelada.es>. Por qué existe, con datos reales de cursus cerrados sin graduarse: [docs/POC.md](docs/POC.md).
 
+<p>
+  <a href="https://konjo.com.es"><img src="https://konjo.com.es/apple-touch-icon.png" alt="Konjō" width="56" align="left" hspace="12"></a>
+  Y si quieres ser productivo en el campus y fuera de él, puedes probar <a href="https://konjo.com.es">Konjō</a>: pronto en Google Play.
+</p>
+<br clear="left">
+
 ## Índice
 
 1. [Qué hace](#qué-hace)

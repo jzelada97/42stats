@@ -177,7 +177,7 @@ def mailtest(to: str = typer.Option(..., "--to", help="Dirección a la que envia
         typer.secho("Faltan FT_SMTP_HOST y FT_MAIL_FROM (mira .env.example).", fg="red")
         raise typer.Exit(1)
     try:
-        base = os.environ.get("FT_BASE_URL", "https://42madrid.zelada.es").rstrip("/")
+        base = os.environ.get("FT_BASE_URL", "https://example.org").rstrip("/")
         mailer.send(to, "Prueba de 42stats", (
             "Si lees esto, el envío por SMTP funciona.\n\n"
             "Estos dos enlaces son como los de los avisos reales. Comprueba que NO han cambiado a otro dominio (pasa el ratón por encima o "

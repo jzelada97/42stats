@@ -36,8 +36,8 @@ class SmtpConfig:
     port: int = 587
     user: str = ""
     password: str = ""
-    sender: str = ""          # p. ej. "42stats <avisos@zelada.es>"
-    reply_to: str = ""        # opcional: adonde llegan las respuestas (p. ej. jose@zelada.es), distinto del remitente
+    sender: str = ""          # p. ej. "42stats <avisos@tudominio.es>"
+    reply_to: str = ""        # opcional: adonde llegan las respuestas (p. ej. tu@tudominio.es), distinto del remitente
 
     @property
     def enabled(self) -> bool:
