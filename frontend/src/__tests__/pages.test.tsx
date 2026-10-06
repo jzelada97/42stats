@@ -46,7 +46,7 @@ describe("Ayuda con texto hostil de otros alumnos", () => {
     mockApi();
     const { container } = render(<Ayuda />);
     await waitFor(() => expect(screen.getAllByText(HOSTILE, { exact: false }).length).toBeGreaterThan(0));
-    expect(container.querySelector("img")).toBeNull();
+    expect([...container.querySelectorAll("img")].filter((i) => !i.closest(".konjo"))).toHaveLength(0);   // el logo de Konjō es el único <img> permitido
     expect(container.querySelector("script")).toBeNull();
     expect(container.querySelector("b")?.textContent).not.toBe("x");              // «<b>x</b>» de un login no crea negritas
     expect((window as any).__pwned).toBeUndefined();
@@ -128,7 +128,7 @@ describe("Ayuda con texto hostil de otros alumnos", () => {
     await waitFor(() => screen.getByText(/varios rechazados/));
     expect(screen.getByText(/4 enviados · 0 aprobados · 3 rechazados · 1 pendientes · último hoy/)).toBeInTheDocument();
     expect(container.textContent).toMatch(/hace 2 días · .* · rechazado/);
-    expect(container.querySelector("img")).toBeNull();
+    expect([...container.querySelectorAll("img")].filter((i) => !i.closest(".konjo"))).toHaveLength(0);   // el logo de Konjō es el único <img> permitido
     expect(container.querySelector("script")).toBeNull();
     expect((window as any).__pwned).toBeUndefined();
   });

@@ -162,6 +162,10 @@ main { max-width: 1120px; margin: 0 auto; padding: 84px 24px 40px; display: grid
 .stack { display: grid; gap: 12px; margin-top: 10px; }
 .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .foot { max-width: 1120px; margin: 0 auto; padding: 32px 24px 64px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--border); }
+.konjo { max-width: 1120px; margin: 0 auto; padding: 8px 24px 56px; display: flex; align-items: center; gap: 14px; color: var(--muted); font-size: 13px; }
+.konjo img { display: block; width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--border); }
+.konjo p { margin: 0; }
+.konjo p a { color: var(--accent-ink); }
 
 /* ---------------------------------------------------------------- tarjetas suaves */
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px 26px; display: grid; gap: 12px; min-width: 0; align-content: start; box-shadow: var(--shadow); }
@@ -402,7 +406,7 @@ svg .cell { stroke: var(--surface); stroke-width: 1; }
 .sig-val { font: 500 24px var(--serif); }
 
 /* ---------------------------------------------------------------- acceso */
-.login-wrap { min-height: 100vh; box-sizing: border-box; display: grid; place-items: center; padding-top: 84px; }
+.login-wrap { min-height: calc(100vh - 112px); box-sizing: border-box; display: grid; place-items: center; padding-top: 84px; }
 .login-card { position: relative; overflow: hidden; max-width: 640px; width: 100%; padding: 44px 40px 40px; gap: 18px; }
 .login-card > *:not(.seigaiha) { position: relative; }
 .login-points { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 12px; font-size: 14px; color: var(--ink-2); }

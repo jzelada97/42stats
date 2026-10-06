@@ -6,12 +6,6 @@ del campus y una sección de ayuda entre alumnos (recursos, mentores que ya vali
 
 En producción: <https://42madrid.zelada.es>. Por qué existe, con datos reales de cursus cerrados sin graduarse: [docs/POC.md](docs/POC.md).
 
-<p>
-  <a href="https://konjo.com.es"><img src="https://konjo.com.es/apple-touch-icon.png" alt="Konjō" width="56" align="left" hspace="12"></a>
-  Y si quieres ser productivo en el campus y fuera de él, puedes probar <a href="https://konjo.com.es">Konjō</a>: pronto en Google Play.
-</p>
-<br clear="left">
-
 ## Índice
 
 1. [Qué hace](#qué-hace)
@@ -28,6 +22,7 @@ En producción: <https://42madrid.zelada.es>. Por qué existe, con datos reales 
 12. [Despliegue y operación](#despliegue-y-operación)
 13. [Avisos por correo con Brevo](#avisos-por-correo-con-brevo)
 14. [Límites conocidos y hoja de ruta](#límites-conocidos-y-hoja-de-ruta)
+15. [Licencia](#licencia)
 
 ## Qué hace
 
@@ -256,7 +251,7 @@ copy .env.example .env              # rellena FT_UID y FT_SECRET (nunca los suba
 
 ```powershell
 .\.venv\Scripts\python -m pytest -q        # 415 pruebas de Python
-cd frontend; npm test                       # 65 pruebas del frontend
+cd frontend; npm test                       # 66 pruebas del frontend
 ```
 
 Integración continua (`.github/workflows/ci.yml`, en cada push, en cada pull request y cada lunes): tipos, pruebas y compilación de la interfaz; pruebas de Python
@@ -338,3 +333,7 @@ Brevo tiene un plan gratuito de 300 correos al día:
 - Moderación de las notas de mentor y botón para reportar contenido.
 - Cerrar sesión por `POST`; copias de seguridad fuera de la VM.
 - Una tercera aplicación de 42 para crear slots y eventos con permisos de escritura.
+
+## Licencia
+
+Todos los derechos reservados. El código se publica para que pueda leerse, y no se puede usar, copiar, modificar ni distribuir sin permiso del autor. Ver [LICENSE](LICENSE).

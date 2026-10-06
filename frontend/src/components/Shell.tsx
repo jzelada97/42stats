@@ -151,6 +151,21 @@ export function Header({ sub, links, current, showAuth = true }: { sub: string; 
   );
 }
 
+/** Otra app del autor, al pie de todas las páginas. El logo se sirve desde esta misma web (la CSP no deja cargar imágenes de fuera). */
+function KonjoNote() {
+  return (
+    <aside className="konjo" aria-label="Konjō">
+      <a href="https://konjo.com.es" target="_blank" rel="noopener noreferrer" aria-hidden="true" tabIndex={-1}>
+        <img src="/static/konjo.png" alt="" width="40" height="40" />
+      </a>
+      <p>
+        Y si quieres ser productivo en el campus y fuera de él, puedes probar{" "}
+        <a href="https://konjo.com.es" target="_blank" rel="noopener noreferrer">Konjō</a>: pronto en Google Play.
+      </p>
+    </aside>
+  );
+}
+
 export function Shell({ sub, links, current, children, foot, showAuth = true }: { sub: string; links: NavLink[]; current?: string; children: ReactNode; foot?: ReactNode; showAuth?: boolean }) {
   return (
     <TooltipProvider>
@@ -159,6 +174,7 @@ export function Shell({ sub, links, current, children, foot, showAuth = true }: 
       <Header sub={sub} links={links} current={current} showAuth={showAuth} />
       {children}
       {foot && <footer className="foot">{foot}</footer>}
+      <KonjoNote />
     </TooltipProvider>
   );
 }
